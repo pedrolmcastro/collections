@@ -197,18 +197,13 @@ stack_t *stack_reverse(stack_t *stack) {
         errno = ENOMEM;
         return NULL;
     }
-    reversed->size = stack->size;
 
     for (_node_t *node = stack->top; node != NULL; node = node->next) {
-        _node_t *newnode = _init_node(node->data, reversed->datasize);
-        if (newnode == NULL) {
+        if (stack_push(reversed, node->data) == RETURN_FAILURE) {
             stack_free(reversed);
             errno = ENOMEM;
             return NULL;
         }
-
-        newnode->next = reversed->top;
-        reversed->top = newnode;
     }
 
     return reversed;
