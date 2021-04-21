@@ -31,8 +31,10 @@ struct _Stack {
     int (*compare)(const void *first, const void *second);
 };
 
+
 static _node_t *_init_node(const void *data, size_t datasize);
 static void _free_node(_node_t *remove, void (*free_data)(void *data));
+
 
 stack_t *stack_init(size_t datasize, int (*compare)(const void *first, const void *second), void (*free_data)(void *data)) {
     if (datasize == 0 || compare == NULL) {
@@ -84,6 +86,7 @@ void stack_free(stack_t *stack) {
         free(stack);
     }
 }
+
 
 int stack_push(stack_t *stack, const void *data) {
     if (stack == NULL || data == NULL) {
@@ -151,6 +154,7 @@ int stack_peek(stack_t *stack, void *destination) {
     return RETURN_SUCCESS;
 }
 
+
 stack_t *stack_clone(stack_t *stack) {
     if (stack == NULL) {
         errno = EFAULT;
@@ -210,6 +214,7 @@ stack_t *stack_reverse(stack_t *stack) {
     return reversed;
 }
 
+
 bool stack_contains(stack_t *stack, const void *key) {
     if (stack == NULL || key == NULL) {
         errno = EFAULT;
@@ -224,6 +229,7 @@ bool stack_contains(stack_t *stack, const void *key) {
     return false;
 }
 
+
 size_t stack_size(stack_t *stack) {
     if (stack == NULL) {
         errno = EFAULT;
@@ -232,6 +238,7 @@ size_t stack_size(stack_t *stack) {
 
     return stack->size;
 }
+
 
 bool stack_isempty(stack_t *stack) {
     if (stack == NULL) {
@@ -250,6 +257,7 @@ bool stack_isfull(stack_t *stack) {
 
     return stack->size == SIZE_MAX;
 }
+
 
 static _node_t *_init_node(const void *data, size_t datasize) {
     _node_t *node = malloc(sizeof(_node_t));
