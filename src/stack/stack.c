@@ -130,8 +130,7 @@ int stack_pop(stack_t *stack, void *destination) {
     if (destination != NULL) {
         memcpy(destination, remove->data, stack->datasize);
         _free_node(remove, NULL);
-    }
-    else {
+    } else {
         _free_node(remove, stack->free_data);
     }
 
