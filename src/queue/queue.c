@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include <stdbool.h>
 
 #include "queue.h"
@@ -22,6 +23,7 @@ struct _Queue {
 };
 
 
+static _node_t *_construct_node(const void *data, size_t width);
 static void _free_node(_node_t *node, void (*free_data)(void *data));
 
 
@@ -75,6 +77,68 @@ void queue_free(queue_t *queue) {
 }
 
 
+bool queue_enqueue(queue_t *queue, const void *data) {
+    if (queue == NULL || data == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (queue_isfull(queue)) {
+        errno = ENOSPC;
+        return false;
+    }
+
+    _node_t *new = _construct_node(data, queue->width);
+    if (new == NULL) {
+        // errno set in _construct_node()
+        return false;
+    }
+
+    if (queue_isempty(queue)) {
+        queue->head = new;
+        queue->tail = new;
+    }
+    else {
+        queue->tail->next = new;
+        queue->tail = new;
+    }
+    queue->size++;
+
+    return true;
+}
+
+bool queue_dequeue(queue_t *queue, void *destination) {
+    if (queue_peek(queue, destination) == false) {
+        // errno set in queue_peek()
+        return false;
+    }
+
+    _node_t *remove = queue->head;
+    queue->head = queue->head->next;
+    
+    _free_node(remove, NULL);
+    queue->size--;
+
+    return true;
+}
+
+bool queue_peek(queue_t *queue, void *destination) {
+    if (queue == NULL || destination == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (queue_isempty(queue)) {
+        errno = EINVAL;
+        return false;
+    }
+
+    memcpy(destination, queue->head->data, queue->width);
+
+    return true;
+}
+
+
 bool queue_isempty(queue_t *queue) {
     if (queue == NULL) {
         errno = EINVAL;
@@ -102,6 +166,31 @@ size_t queue_size(queue_t *queue) {
     return queue->size;
 }
 
+
+static _node_t *_construct_node(const void *data, size_t width) {
+    if (data == NULL || width == 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    _node_t *node = malloc(sizeof(_node_t));
+    if (node == NULL) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    node->data = malloc(width);
+    if (node->data == NULL) {
+        free(node);
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    memcpy(node->data, data, width);
+    node->next = NULL;
+
+    return node;
+}
 
 static void _free_node(_node_t *node, void (*free_data)(void *data)) {
     if (node != NULL) {

@@ -11,9 +11,20 @@ int compare(const void *first, const void *second) {
 int main() {
     queue_t *queue = queue_construct(sizeof(int), NULL, compare);
 
-    puts(queue_isempty(queue) ? "true" : "false");
-    puts(queue_isfull(queue) ? "true" : "false");
-    printf("%lu\n", queue_size(queue));
+    for (int number = 1; number <= 5; number++) {
+        queue_enqueue(queue, &number);
+    }
+
+    printf("size: %lu\n", queue_size(queue));
+
+    int destination;
+    queue_peek(queue, &destination);
+    printf("peek: %d\n", destination);
+
+    while (!queue_isempty(queue)) {
+        queue_dequeue(queue, &destination);
+        printf("%d\n", destination);
+    }
 
     queue_free(queue);
 
