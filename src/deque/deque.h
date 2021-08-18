@@ -13,6 +13,14 @@ deque_t *deque_construct(size_t width, void (*free_data)(void *data), int (*comp
 void deque_free(deque_t *deque);
 void deque_clear(deque_t *deque);
 
+bool deque_unshift(deque_t *deque, const void *data);
+bool deque_shift(deque_t *deque, void *destination);
+bool deque_front(deque_t *deque, void *destination);
+
+bool deque_push(deque_t *deque, const void *data);
+bool deque_pop(deque_t *deque, void *destination);
+bool deque_back(deque_t *deque, void *destination);
+
 bool deque_isempty(deque_t *deque);
 bool deque_isfull(deque_t *deque);
 size_t deque_size(deque_t *deque);

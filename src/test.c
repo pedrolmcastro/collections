@@ -11,9 +11,24 @@ int compare(const void *first, const void *second) {
 int main() {
     deque_t *deque = deque_construct(sizeof(int), NULL, compare);
     
-    puts(deque_isempty(deque) ? "true" : "false");
-    puts(deque_isfull(deque) ? "true" : "false");
-    printf("%lu\n", deque_size(deque));
+    for (int numero = 1; numero <= 5; numero++) {
+        deque_unshift(deque, &numero);
+    }
+    while (!deque_isempty(deque)) {
+        int destination;
+        deque_pop(deque, &destination);
+        printf("%d\n", destination);
+    }
+    putchar('\n');
+
+    for (int numero = 1; numero <= 5; numero++) {
+        deque_push(deque, &numero);
+    }
+    while (!deque_isempty(deque)) {
+        int destination;
+        deque_shift(deque, &destination);
+        printf("%d\n", destination);
+    }
 
     deque_free(deque);
 
