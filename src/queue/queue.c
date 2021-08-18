@@ -14,8 +14,8 @@ typedef struct _Node {
 _node_t;
 
 struct _Queue {
-    _node_t *head;
-    _node_t *tail;
+    _node_t *front;
+    _node_t *back;
     size_t width;
     size_t size;
     void (*free_data)(void *data);
@@ -39,8 +39,8 @@ queue_t *queue_construct(size_t width, void (*free_data)(void *data), int (*comp
         return NULL;
     }
 
-    queue->head = NULL;
-    queue->tail = NULL;
+    queue->front = NULL;
+    queue->back = NULL;
     queue->size = 0;
 
     queue->width = width;
@@ -62,7 +62,7 @@ queue_t *queue_clone(queue_t *queue) {
         return NULL;
     }
 
-    for (_node_t *node = queue->head; node != NULL; node = node->next) {
+    for (_node_t *node = queue->front; node != NULL; node = node->next) {
         if (queue_enqueue(clone, node->data) == false) {
             queue_free(clone);
             // errno set in queue_enqueue()
@@ -85,7 +85,7 @@ queue_t *queue_reverse(queue_t *queue) {
         return NULL;
     }
 
-    for (_node_t *node = queue->head; node != NULL; node = node->next) {
+    for (_node_t *node = queue->front; node != NULL; node = node->next) {
         _node_t *new = _construct_node(node->data, queue->width);
         if (new == NULL) {
             queue_free(reversed);
@@ -94,12 +94,12 @@ queue_t *queue_reverse(queue_t *queue) {
         }
 
         if (queue_isempty(reversed)) {
-            reversed->head = new;
-            reversed->tail = new;
+            reversed->front = new;
+            reversed->back = new;
         }
         else {
-            new->next = reversed->head;
-            reversed->head = new;
+            new->next = reversed->front;
+            reversed->front = new;
         }
         reversed->size++;
     }
@@ -121,7 +121,7 @@ void queue_clear(queue_t *queue) {
         return;
     }
 
-    _node_t *node = queue->head;
+    _node_t *node = queue->front;
     while (node != NULL) {
         _node_t *remove = node;
         node = node->next;
@@ -129,8 +129,8 @@ void queue_clear(queue_t *queue) {
         _free_node(remove, queue->free_data);
     }
 
-    queue->head = NULL;
-    queue->tail = NULL;
+    queue->front = NULL;
+    queue->back = NULL;
     queue->size = 0;
 }
 
@@ -153,12 +153,12 @@ bool queue_enqueue(queue_t *queue, const void *data) {
     }
 
     if (queue_isempty(queue)) {
-        queue->head = new;
-        queue->tail = new;
+        queue->front = new;
+        queue->back = new;
     }
     else {
-        queue->tail->next = new;
-        queue->tail = new;
+        queue->back->next = new;
+        queue->back = new;
     }
     queue->size++;
 
@@ -171,8 +171,8 @@ bool queue_dequeue(queue_t *queue, void *destination) {
         return false;
     }
 
-    _node_t *remove = queue->head;
-    queue->head = queue->head->next;
+    _node_t *remove = queue->front;
+    queue->front = queue->front->next;
 
     _free_node(remove, NULL);
     queue->size--;
@@ -191,7 +191,7 @@ bool queue_peek(queue_t *queue, void *destination) {
         return false;
     }
 
-    memcpy(destination, queue->head->data, queue->width);
+    memcpy(destination, queue->front->data, queue->width);
 
     return true;
 }
@@ -203,7 +203,7 @@ bool queue_contains(queue_t *queue, const void *key) {
         return false;
     }
 
-    for (_node_t *node = queue->head; node != NULL; node = node->next) {
+    for (_node_t *node = queue->front; node != NULL; node = node->next) {
         if (queue->compare(node->data, key) == 0) {
             return true;
         }
@@ -219,7 +219,7 @@ bool queue_isempty(queue_t *queue) {
         return false;
     }
 
-    return queue->head == NULL;
+    return queue->front == NULL;
 }
 
 bool queue_isfull(queue_t *queue) {
