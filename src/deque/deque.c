@@ -1,5 +1,7 @@
 #include <errno.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
 
 #include "deque.h"
 
@@ -72,6 +74,34 @@ void deque_clear(deque_t *deque) {
     deque->front = NULL;
     deque->back = NULL;
     deque->size = 0;
+}
+
+
+bool deque_isempty(deque_t *deque) {
+    if (deque == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    return deque->front == NULL;
+}
+
+bool deque_isfull(deque_t *deque) {
+    if (deque == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    return deque->size == SIZE_MAX;
+}
+
+size_t deque_size(deque_t *deque) {
+    if (deque == NULL) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    return deque->size;
 }
 
 
