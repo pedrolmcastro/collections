@@ -50,6 +50,71 @@ queue_t *queue_construct(size_t width, void (*free_data)(void *data), int (*comp
     return queue;
 }
 
+queue_t *queue_clone(queue_t *queue) {
+    if (queue == NULL) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    queue_t *clone = queue_construct(queue->width, queue->free_data, queue->compare);
+    if (clone == NULL) {
+        // errno set in queue_construct()
+        return NULL;
+    }
+
+    for (_node_t *node = queue->head; node != NULL; node = node->next) {
+        if (queue_enqueue(clone, node->data) == false) {
+            queue_free(clone);
+            // errno set in queue_enqueue()
+            return NULL;
+        }
+    }
+
+    return clone;
+}
+
+queue_t *queue_reverse(queue_t *queue) {
+    if (queue == NULL) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    queue_t *reversed = queue_construct(queue->width, queue->free_data, queue->compare);
+    if (reversed == NULL) {
+        // errno set in queue_construct()
+        return NULL;
+    }
+
+    for (_node_t *node = queue->head; node != NULL; node = node->next) {
+        _node_t *new = _construct_node(node->data, queue->width);
+        if (new == NULL) {
+            queue_free(reversed);
+            // errno set in _construct_node()
+            return NULL;
+        }
+
+        if (queue_isempty(reversed)) {
+            reversed->head = new;
+            reversed->tail = new;
+        }
+        else {
+            new->next = reversed->head;
+            reversed->head = new;
+        }
+        reversed->size++;
+    }
+
+    return reversed;
+}
+
+
+void queue_free(queue_t *queue) {
+    if (queue != NULL) {
+        queue_clear(queue);
+        free(queue);
+    }
+}
+
 void queue_clear(queue_t *queue) {
     if (queue == NULL) {
         errno = EINVAL;
@@ -67,13 +132,6 @@ void queue_clear(queue_t *queue) {
     queue->head = NULL;
     queue->tail = NULL;
     queue->size = 0;
-}
-
-void queue_free(queue_t *queue) {
-    if (queue != NULL) {
-        queue_clear(queue);
-        free(queue);
-    }
 }
 
 

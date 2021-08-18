@@ -9,8 +9,11 @@ typedef struct _Queue queue_t;
 
 
 queue_t *queue_construct(size_t width, void (*free_data)(void *data), int (*compare)(const void *first, const void *second));
-void queue_clear(queue_t *queue);
+queue_t *queue_clone(queue_t *queue);
+queue_t *queue_reverse(queue_t *queue);
+
 void queue_free(queue_t *queue);
+void queue_clear(queue_t *queue);
 
 bool queue_enqueue(queue_t *queue, const void *data);
 bool queue_dequeue(queue_t *queue, void *destination);
