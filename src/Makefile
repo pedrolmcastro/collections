@@ -5,7 +5,7 @@ SOURCES = stack/*.c queue/*.c
 INCLUDES = -I stack -I queue
 
 compile:
-	@$(CC) $(MAIN) $(SOURCES) -o $(BINARY) $(INCLUDES)
+	@$(CC) $(MAIN) $(SOURCES) -o $(BINARY) $(INCLUDES) -Wall -Werror
 
 run:
 	@./$(BINARY)

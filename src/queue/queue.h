@@ -2,6 +2,7 @@
 #define QUEUE_H
 
 #include <stddef.h>
+#include <stdbool.h>
 
 
 typedef struct _Queue queue_t;
@@ -10,5 +11,9 @@ typedef struct _Queue queue_t;
 queue_t *queue_construct(size_t width, void (*free_data)(void *data), int (*compare)(const void *first, const void *second));
 void queue_clear(queue_t *queue);
 void queue_free(queue_t *queue);
+
+bool queue_isempty(queue_t *queue);
+bool queue_isfull(queue_t *queue);
+size_t queue_size(queue_t *queue);
 
 #endif // QUEUE_H

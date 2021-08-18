@@ -1,7 +1,9 @@
-#include "queue.h"
-
 #include <errno.h>
 #include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
+
+#include "queue.h"
 
 
 typedef struct _Node {
@@ -70,6 +72,34 @@ void queue_free(queue_t *queue) {
         queue_clear(queue);
         free(queue);
     }
+}
+
+
+bool queue_isempty(queue_t *queue) {
+    if (queue == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    return queue->head == NULL;
+}
+
+bool queue_isfull(queue_t *queue) {
+    if (queue == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    return queue->size == SIZE_MAX;
+}
+
+size_t queue_size(queue_t *queue) {
+    if (queue == NULL) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    return queue->size;
 }
 
 
