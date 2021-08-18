@@ -14,24 +14,14 @@ int main() {
         queue_enqueue(queue, &number);
     }
 
-    queue_t *clone = queue_clone(queue);
-    while (!queue_isempty(clone)) {
-        int destination;
-        queue_dequeue(clone, &destination);
-        printf("%d\n", destination);
-    }
-    putchar('\n');
+    int key = 1;
+    puts(queue_contains(queue, &key) ? "true" : "false");
 
-    queue_t *reversed = queue_reverse(queue);
-    while (!queue_isempty(reversed)) {
-        int destination;
-        queue_dequeue(reversed, &destination);
-        printf("%d\n", destination);
-    }
+    int destination;
+    queue_dequeue(queue, &destination);
+    puts(queue_contains(queue, &key) ? "true" : "false");
 
     queue_free(queue);
-    queue_free(clone);
-    queue_free(reversed);
 
     return 0;
 }

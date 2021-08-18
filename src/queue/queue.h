@@ -19,6 +19,8 @@ bool queue_enqueue(queue_t *queue, const void *data);
 bool queue_dequeue(queue_t *queue, void *destination);
 bool queue_peek(queue_t *queue, void *destination);
 
+bool queue_contains(queue_t *queue, const void *key);
+
 bool queue_isempty(queue_t *queue);
 bool queue_isfull(queue_t *queue);
 size_t queue_size(queue_t *queue);

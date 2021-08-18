@@ -173,7 +173,7 @@ bool queue_dequeue(queue_t *queue, void *destination) {
 
     _node_t *remove = queue->head;
     queue->head = queue->head->next;
-    
+
     _free_node(remove, NULL);
     queue->size--;
 
@@ -194,6 +194,22 @@ bool queue_peek(queue_t *queue, void *destination) {
     memcpy(destination, queue->head->data, queue->width);
 
     return true;
+}
+
+
+bool queue_contains(queue_t *queue, const void *key) {
+    if (queue == NULL || key == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    for (_node_t *node = queue->head; node != NULL; node = node->next) {
+        if (queue->compare(node->data, key) == 0) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 
