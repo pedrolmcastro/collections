@@ -174,6 +174,10 @@ bool queue_dequeue(queue_t *queue, void *destination) {
     _node_t *remove = queue->front;
     queue->front = queue->front->next;
 
+    if (queue->front == NULL) {
+        queue->back = NULL;
+    }
+
     _free_node(remove, NULL);
     queue->size--;
 
