@@ -51,6 +51,29 @@ deque_t *deque_construct(size_t width, void (*free_data)(void *data), int (*comp
     return deque;
 }
 
+deque_t *deque_clone(deque_t *deque) {
+    if (deque == NULL) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    deque_t *clone = deque_construct(deque->width, deque->free_data, deque->compare);
+    if (clone == NULL) {
+        // errno set in deque_construct()
+        return NULL;
+    }
+
+    for (_node_t *node = deque->front; node != NULL; node = node->next) {
+        if (deque_push(clone, node->data) == false) {
+            deque_free(deque);
+            // errno set in deque_push()
+            return NULL;
+        }
+    }
+
+    return clone;
+}
+
 
 void deque_free(deque_t *deque) {
     if (deque != NULL) {
