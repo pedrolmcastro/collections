@@ -22,6 +22,8 @@ bool deque_push(deque_t *deque, const void *data);
 bool deque_pop(deque_t *deque, void *destination);
 bool deque_back(deque_t *deque, void *destination);
 
+bool deque_contains(deque_t *deque, const void *key);
+
 bool deque_isempty(deque_t *deque);
 bool deque_isfull(deque_t *deque);
 size_t deque_size(deque_t *deque);

@@ -242,6 +242,22 @@ bool deque_back(deque_t *deque, void *destination) {
 }
 
 
+bool deque_contains(deque_t *deque, const void *key) {
+    if (deque == NULL || key == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    for (_node_t *node = deque->front; node != NULL; node = node->next) {
+        if (deque->compare(node->data, key) == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
 bool deque_isempty(deque_t *deque) {
     if (deque == NULL) {
         errno = EINVAL;

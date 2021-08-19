@@ -14,15 +14,14 @@ int main() {
         deque_push(deque, &number);
     }
 
-    deque_t *clone = deque_clone(deque);
-    while (!deque_isempty(clone)) {
-        int destination;
-        deque_shift(clone, &destination);
-        printf("%d\n", destination);
-    }
+    const int KEY = 5;
+    puts(deque_contains(deque, &KEY) ? "true" : "false");
+
+    int destination;
+    deque_pop(deque, &destination);
+    puts(deque_contains(deque, &KEY) ? "true" : "false");
     
     deque_free(deque);
-    deque_free(clone);
 
     return 0;
 }
