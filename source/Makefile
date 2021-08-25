@@ -1,8 +1,8 @@
 CC = gcc
 MAIN = test.c
 BINARY = test
-SOURCES = stack/*.c queue/*.c deque/*.c
-INCLUDES = -I stack -I queue -I deque
+SOURCES = stack/*.c queue/*.c deque/*.c vector/*.c
+INCLUDES = -I stack -I queue -I deque -I vector
 
 compile:
 	@$(CC) $(MAIN) $(SOURCES) -o $(BINARY) $(INCLUDES) -Wall -Werror

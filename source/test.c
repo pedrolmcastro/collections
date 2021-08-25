@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#include "deque.h"
+#include "vector.h"
 
 
 int compare(const void *first, const void *second) {
@@ -9,19 +9,9 @@ int compare(const void *first, const void *second) {
 
 
 int main() {
-    deque_t *deque = deque_construct(sizeof(int), NULL, compare);
-    for (int number = 1; number <= 5; number++) {
-        deque_push(deque, &number);
-    }
-
-    const int KEY = 5;
-    puts(deque_contains(deque, &KEY) ? "true" : "false");
-
-    int destination;
-    deque_pop(deque, &destination);
-    puts(deque_contains(deque, &KEY) ? "true" : "false");
-    
-    deque_free(deque);
+    vector_t *vector = vector_cosntruct(sizeof(int), 10, 2, NULL, compare);
+    printf("%p\n", vector);
+    vector_free(vector);
 
     return 0;
 }
