@@ -10,7 +10,12 @@ int compare(const void *first, const void *second) {
 
 int main() {
     vector_t *vector = vector_cosntruct(sizeof(int), 10, 2, NULL, compare);
-    printf("%p\n", vector);
+    
+    puts(vector_isempty(vector) ? "true" : "false");
+    puts(vector_isfull(vector) ? "true" : "false");
+    printf("%lu\n", vector_size(vector));
+    printf("%lu\n", vector_capacity(vector));
+
     vector_free(vector);
 
     return 0;

@@ -1,5 +1,6 @@
 #include <errno.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <stdbool.h>
 
 #include "vector.h"
@@ -101,6 +102,25 @@ bool vector_clear(vector_t *vector) {
     vector->size = 0;
 
     return true;
+}
+
+
+bool vector_isempty(vector_t *vector) {
+    if (vector == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    return vector->size == 0;
+}
+
+bool vector_isfull(vector_t *vector) {
+    if (vector == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    return vector->size == SIZE_MAX;
 }
 
 

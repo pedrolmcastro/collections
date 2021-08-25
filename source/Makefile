@@ -5,7 +5,7 @@ SOURCES = stack/*.c queue/*.c deque/*.c vector/*.c
 INCLUDES = -I stack -I queue -I deque -I vector
 
 compile:
-	@$(CC) $(MAIN) $(SOURCES) -o $(BINARY) $(INCLUDES) -Wall -Werror
+	@$(CC) $(MAIN) $(SOURCES) -o $(BINARY) $(INCLUDES) -Wall -Werror -g
 
 run:
 	@./$(BINARY)

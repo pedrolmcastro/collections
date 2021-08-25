@@ -14,6 +14,9 @@ void vector_free(vector_t *vector);
 bool vector_trim(vector_t *vector);
 bool vector_clear(vector_t *vector);
 
+bool vector_isempty(vector_t *vector);
+bool vector_isfull(vector_t *vector);
+
 size_t vector_size(vector_t *vector);
 size_t vector_capacity(vector_t *vector);
 
