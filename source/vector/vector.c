@@ -1,6 +1,8 @@
+#include <math.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include <stdbool.h>
 
 #include "vector.h"
@@ -17,6 +19,7 @@ struct _Vector {
 };
 
 
+static void *_construct_element(const void *data, size_t width);
 static void _free_element(void *element, void (*free_data)(void *data));
 
 
@@ -64,31 +67,6 @@ void vector_free(vector_t *vector) {
     }
 }
 
-bool vector_trim(vector_t *vector) {
-    if (vector == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    if (vector_size(vector) > 0) {
-        void **temporary = realloc(vector->elements, vector_size(vector) * sizeof(void *));
-        if (temporary == NULL) {
-            errno = ENOMEM;
-            return false;
-        }
-
-        vector->elements = temporary;
-    }
-    else {
-        free(vector->elements);
-        vector->elements = NULL;
-    }
-
-    vector->capacity = vector_size(vector);
-
-    return true;
-}
-
 bool vector_clear(vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
@@ -100,6 +78,132 @@ bool vector_clear(vector_t *vector) {
     }
 
     vector->size = 0;
+
+    return true;
+}
+
+
+bool vector_reserve(vector_t *vector, size_t size) {
+    if (vector == NULL || size <= vector_size(vector)) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (vector_capacity(vector) >= size) {
+        return true;
+    }
+
+    size_t capacity = fmax(1, vector_capacity(vector));
+    while (capacity < size) {
+        capacity = fmin(capacity * vector->increment, SIZE_MAX);
+    }
+
+    void **elements = realloc(vector->elements, capacity * sizeof(void *));
+    if (elements == NULL) {
+        errno = ENOMEM;
+        return false;
+    }
+
+    vector->elements = elements;
+    vector->capacity = capacity;
+
+    return true;
+}
+
+bool vector_trim(vector_t *vector) {
+    if (vector == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (vector_size(vector) > 0) {
+        void **elements = realloc(vector->elements, vector_size(vector) * sizeof(void *));
+        if (elements == NULL) {
+            errno = ENOMEM;
+            return false;
+        }
+
+        vector->elements = elements;
+    }
+    else {
+        free(vector->elements);
+        vector->elements = NULL;
+    }
+
+    vector->capacity = vector_size(vector);
+
+    return true;
+}
+
+
+bool vector_insert(vector_t *vector, size_t index, const void *data) {
+    if (vector == NULL || index > vector_size(vector) || data == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (vector_isfull(vector)) {
+        errno = ENOSPC;
+        return false;
+    }
+
+    if (vector_reserve(vector, vector_size(vector) + 1) == false) {
+        // errno set in vector_reserve()
+        return false;
+    }
+
+    void *new = _construct_element(data, vector->width);
+    if (new == NULL) {
+        // errno set in _construct_element()
+        return false;
+    }
+
+    for (size_t i = vector_size(vector); i > index; i--) {
+        vector->elements[i] = vector->elements[i - 1];
+    }
+
+    vector->elements[index] = new;
+    vector->size++;
+
+    return true;
+}
+
+
+bool vector_get(vector_t *vector, size_t index, void *destination) {
+    if (vector == NULL || index >= vector_size(vector) || destination == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (vector_isempty(vector)) {
+        errno = EINVAL;
+        return false;
+    }
+
+    memcpy(destination, vector->elements[index], vector->width);
+
+    return true;
+}
+
+bool vector_set(vector_t *vector, size_t index, const void *data) {
+    if (vector == NULL || index >= vector_size(vector) || data == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (vector_isempty(vector)) {
+        errno = EINVAL;
+        return false;
+    }
+
+    void *new = _construct_element(data, vector->width);
+    if (new == NULL) {
+        // errno set in _construct_element()
+        return false;
+    }
+
+    _free_element(vector->elements[index], vector->free_data);
+    vector->elements[index] = new;
 
     return true;
 }
@@ -142,6 +246,23 @@ size_t vector_capacity(vector_t *vector) {
     return vector->capacity;
 }
 
+
+static void *_construct_element(const void *data, size_t width) {
+    if (data == NULL || width == 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    void *element = malloc(width);
+    if (element == NULL) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    memcpy(element, data, width);
+
+    return element;
+}
 
 static void _free_element(void *element, void (*free_data)(void *data)) {
     if (element != NULL) {

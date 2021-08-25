@@ -3,9 +3,10 @@ MAIN = test.c
 BINARY = test
 SOURCES = stack/*.c queue/*.c deque/*.c vector/*.c
 INCLUDES = -I stack -I queue -I deque -I vector
+LIBRARIES = -lm
 
 compile:
-	@$(CC) $(MAIN) $(SOURCES) -o $(BINARY) $(INCLUDES) -Wall -Werror -g
+	@$(CC) $(MAIN) $(SOURCES) -o $(BINARY) $(INCLUDES) $(LIBRARIES) -Wall -Werror -g
 
 run:
 	@./$(BINARY)
