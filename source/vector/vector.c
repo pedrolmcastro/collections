@@ -6,6 +6,8 @@
 
 #include "vector.h"
 
+#include <stdio.h>
+
 
 struct _Vector {
     size_t size;
@@ -13,18 +15,20 @@ struct _Vector {
     size_t limit;
     size_t capacity;
     double increment;
-    void **elements;
+    void **data;
     void (*free_data)(void *data);
+    bool (*clone_data)(const void *source, void *destination);
 };
 
 const size_t VECTOR_LIMIT = SIZE_MAX / (2 * sizeof(void *)) - 1;
 
 
-static void *_construct_element(const void *data, size_t width);
-static void _free_element(void *element, void (*free_data)(void *data));
+static bool _data_clone(vector_t *vector, const void *data, void *destination);
+static void *_data_construct(vector_t *vector, const void *data);
+static void _data_free(vector_t *vector, void *data);
 
 
-vector_t *vector_cosntruct(size_t width, size_t limit, size_t capacity, double increment, void (*free_data)(void *data)) {
+vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double increment, bool (*clone_data)(const void *source, void *destination), void (*free_data)(void *data)) {
     if (width == 0 || limit == 0 || limit > VECTOR_LIMIT || capacity > limit || increment < 1.5) {
         errno = EINVAL;
         return NULL;
@@ -37,15 +41,15 @@ vector_t *vector_cosntruct(size_t width, size_t limit, size_t capacity, double i
     }
 
     if (capacity > 0) {
-        vector->elements = malloc(capacity * sizeof(void *));
-        if (vector->elements == NULL) {
+        vector->data = malloc(capacity * sizeof(void *));
+        if (vector->data == NULL) {
             vector_free(vector);
             errno = ENOMEM;
             return NULL;
         }
     }
     else {
-        vector->elements = NULL;
+        vector->data = NULL;
     }
 
     vector->size = 0;
@@ -55,6 +59,7 @@ vector_t *vector_cosntruct(size_t width, size_t limit, size_t capacity, double i
     vector->capacity = capacity;
     vector->increment = increment;
     vector->free_data = free_data;
+    vector->clone_data = clone_data;
 
     return vector;
 }
@@ -75,7 +80,7 @@ bool vector_clear(vector_t *vector) {
     }
 
     for (size_t i = 0; i < vector->size; i++) {
-        _free_element(vector->elements[i], vector->free_data);
+        _data_free(vector, vector->data[i]);
     }
 
     vector->size = 0;
@@ -108,13 +113,13 @@ bool vector_reserve(vector_t *vector, size_t size) {
         }
     }
 
-    void **elements = realloc(vector->elements, capacity * sizeof(void *));
-    if (elements == NULL) {
+    void **data = realloc(vector->data, capacity * sizeof(void *));
+    if (data == NULL) {
         errno = ENOMEM;
         return false;
     }
 
-    vector->elements = elements;
+    vector->data = data;
     vector->capacity = capacity;
 
     return true;
@@ -127,17 +132,17 @@ bool vector_trim(vector_t *vector) {
     }
 
     if (vector_empty(vector)) {
-        free(vector->elements);
-        vector->elements = NULL;
+        free(vector->data);
+        vector->data = NULL;
     }
     else {
-        void **elements = realloc(vector->elements, vector->size * sizeof(void *));
-        if (elements == NULL) {
+        void **data = realloc(vector->data, vector->size * sizeof(void *));
+        if (data == NULL) {
             errno = ENOMEM;
             return false;
         }
 
-        vector->elements = elements;
+        vector->data = data;
     }
 
     vector->capacity = vector->size;
@@ -162,17 +167,17 @@ bool vector_insert(vector_t *vector, const void *data, size_t index) {
         return false;
     }
 
-    void *new = _construct_element(data, vector->width);
+    void *new = _data_construct(vector, data);
     if (new == NULL) {
-        // errno set in _construct_element()
+        // errno set in _data_construct()
         return false;
     }
 
     for (size_t i = vector->size; i > index; i--) {
-        vector->elements[i] = vector->elements[i - 1];
+        vector->data[i] = vector->data[i - 1];
     }
 
-    vector->elements[index] = new;
+    vector->data[index] = new;
     vector->size++;
 
     return true;
@@ -185,7 +190,7 @@ bool vector_get(vector_t *vector, void *destination, size_t index) {
         return false;
     }
 
-    memcpy(destination, vector->elements[index], vector->width);
+    _data_clone(vector, vector->data[index], destination);
 
     return true;
 }
@@ -196,14 +201,14 @@ bool vector_set(vector_t *vector, const void *data, size_t index) {
         return false;
     }
 
-    void *new = _construct_element(data, vector->width);
+    void *new = _data_construct(vector, data);
     if (new == NULL) {
-        // errno set in _construct_element()
+        // errno set in _data_construct()
         return false;
     }
 
-    _free_element(vector->elements[index], vector->free_data);
-    vector->elements[index] = new;
+    _data_free(vector, vector->data[index]);
+    vector->data[index] = new;
 
     return true;
 }
@@ -265,29 +270,53 @@ bool vector_full(vector_t *vector) {
 }
 
 
-static void *_construct_element(const void *data, size_t width) {
-    if (data == NULL || width == 0) {
+static bool _data_clone(vector_t *vector, const void *data, void *destination) {
+    if (vector == NULL || data == NULL || destination == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (vector->clone_data != NULL) {
+        return vector->clone_data(data, destination);
+    }
+    else {
+        memcpy(destination, data, vector->width);
+        return true;
+    }
+}
+
+static void *_data_construct(vector_t *vector, const void *data) {
+    if (vector == NULL || data == NULL) {
         errno = EINVAL;
         return NULL;
     }
 
-    void *element = malloc(width);
-    if (element == NULL) {
+    void *new = malloc(vector->width);
+    if (new == NULL) {
         errno = ENOMEM;
         return NULL;
     }
 
-    memcpy(element, data, width);
+    if (_data_clone(vector, data, new) == false) {
+        _data_free(vector, new);
+        // errno set in _data_clone()
+        return NULL;
+    }
 
-    return element;
+    return new;
 }
 
-static void _free_element(void *element, void (*free_data)(void *data)) {
-    if (element != NULL) {
-        if (free_data != NULL) {
-            free_data(element);
+static void _data_free(vector_t *vector, void *data) {
+    if (vector == NULL) {
+        errno = EINVAL;
+        return;
+    }
+
+    if (data != NULL) {
+        if (vector->free_data != NULL) {
+            vector->free_data(data);
         }
 
-        free(element);
+        free(data);
     }
 }

@@ -9,7 +9,7 @@ typedef struct _Vector vector_t;
 extern const size_t VECTOR_LIMIT;
 
 
-vector_t *vector_cosntruct(size_t width, size_t limit, size_t capacity, double increment, void (*free_data)(void *data));
+vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double increment, bool (*clone_data)(const void *source, void *destination), void (*free_data)(void *data));
 
 void vector_free(vector_t *vector);
 bool vector_clear(vector_t *vector);
