@@ -1,4 +1,3 @@
-#include <math.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -9,22 +8,24 @@
 
 
 struct _Vector {
-    size_t width;
     size_t size;
+    size_t width;
+    size_t limit;
     size_t capacity;
     double increment;
     void **elements;
     void (*free_data)(void *data);
-    int (*compare)(const void *first, const void *second);
 };
+
+const size_t VECTOR_LIMIT = SIZE_MAX / (2 * sizeof(void *)) - 1;
 
 
 static void *_construct_element(const void *data, size_t width);
 static void _free_element(void *element, void (*free_data)(void *data));
 
 
-vector_t *vector_cosntruct(size_t width, size_t capacity, double increment, void (*free_data)(void *data), int (*compare)(const void *first, const void *second)) {
-    if (width == 0 || increment <= 1 || compare == NULL) {
+vector_t *vector_cosntruct(size_t width, size_t limit, size_t capacity, double increment, void (*free_data)(void *data)) {
+    if (width == 0 || limit == 0 || limit > VECTOR_LIMIT || capacity > limit || increment < 1.5) {
         errno = EINVAL;
         return NULL;
     }
@@ -50,10 +51,10 @@ vector_t *vector_cosntruct(size_t width, size_t capacity, double increment, void
     vector->size = 0;
 
     vector->width = width;
+    vector->limit = limit;
     vector->capacity = capacity;
     vector->increment = increment;
     vector->free_data = free_data;
-    vector->compare = compare;
 
     return vector;
 }
@@ -73,7 +74,7 @@ bool vector_clear(vector_t *vector) {
         return false;
     }
 
-    for (size_t i = 0; i < vector_size(vector); i++) {
+    for (size_t i = 0; i < vector->size; i++) {
         _free_element(vector->elements[i], vector->free_data);
     }
 
@@ -84,18 +85,27 @@ bool vector_clear(vector_t *vector) {
 
 
 bool vector_reserve(vector_t *vector, size_t size) {
-    if (vector == NULL || size <= vector_size(vector)) {
+    if (vector == NULL || size > vector->limit) {
         errno = EINVAL;
         return false;
     }
 
-    if (vector_capacity(vector) >= size) {
+    if (size <= vector->capacity) {
         return true;
     }
 
-    size_t capacity = fmax(1, vector_capacity(vector));
+    size_t capacity = vector->capacity == 0 ? 1 : vector->capacity;
     while (capacity < size) {
-        capacity = fmin(capacity * vector->increment, SIZE_MAX);
+        capacity *= vector->increment;
+
+        if (capacity > vector->limit) {
+            capacity = vector->limit;
+        }
+
+        // Detect overflow
+        else if (capacity <= vector->capacity) {
+            capacity = vector->limit;
+        }
     }
 
     void **elements = realloc(vector->elements, capacity * sizeof(void *));
@@ -116,8 +126,12 @@ bool vector_trim(vector_t *vector) {
         return false;
     }
 
-    if (vector_size(vector) > 0) {
-        void **elements = realloc(vector->elements, vector_size(vector) * sizeof(void *));
+    if (vector_empty(vector)) {
+        free(vector->elements);
+        vector->elements = NULL;
+    }
+    else {
+        void **elements = realloc(vector->elements, vector->size * sizeof(void *));
         if (elements == NULL) {
             errno = ENOMEM;
             return false;
@@ -125,29 +139,25 @@ bool vector_trim(vector_t *vector) {
 
         vector->elements = elements;
     }
-    else {
-        free(vector->elements);
-        vector->elements = NULL;
-    }
 
-    vector->capacity = vector_size(vector);
+    vector->capacity = vector->size;
 
     return true;
 }
 
 
-bool vector_insert(vector_t *vector, size_t index, const void *data) {
-    if (vector == NULL || index > vector_size(vector) || data == NULL) {
+bool vector_insert(vector_t *vector, const void *data, size_t index) {
+    if (vector == NULL || data == NULL || index > vector->size) {
         errno = EINVAL;
         return false;
     }
 
-    if (vector_isfull(vector)) {
+    if (vector_full(vector)) {
         errno = ENOSPC;
         return false;
     }
 
-    if (vector_reserve(vector, vector_size(vector) + 1) == false) {
+    if (vector_reserve(vector, vector->size + 1) == false) {
         // errno set in vector_reserve()
         return false;
     }
@@ -158,7 +168,7 @@ bool vector_insert(vector_t *vector, size_t index, const void *data) {
         return false;
     }
 
-    for (size_t i = vector_size(vector); i > index; i--) {
+    for (size_t i = vector->size; i > index; i--) {
         vector->elements[i] = vector->elements[i - 1];
     }
 
@@ -169,13 +179,8 @@ bool vector_insert(vector_t *vector, size_t index, const void *data) {
 }
 
 
-bool vector_get(vector_t *vector, size_t index, void *destination) {
-    if (vector == NULL || index >= vector_size(vector) || destination == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    if (vector_isempty(vector)) {
+bool vector_get(vector_t *vector, void *destination, size_t index) {
+    if (vector == NULL || destination == NULL || index >= vector->size) {
         errno = EINVAL;
         return false;
     }
@@ -185,13 +190,8 @@ bool vector_get(vector_t *vector, size_t index, void *destination) {
     return true;
 }
 
-bool vector_set(vector_t *vector, size_t index, const void *data) {
-    if (vector == NULL || index >= vector_size(vector) || data == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    if (vector_isempty(vector)) {
+bool vector_set(vector_t *vector, const void *data, size_t index) {
+    if (vector == NULL || data == NULL || index >= vector->size) {
         errno = EINVAL;
         return false;
     }
@@ -209,25 +209,6 @@ bool vector_set(vector_t *vector, size_t index, const void *data) {
 }
 
 
-bool vector_isempty(vector_t *vector) {
-    if (vector == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    return vector->size == 0;
-}
-
-bool vector_isfull(vector_t *vector) {
-    if (vector == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    return vector->size == SIZE_MAX;
-}
-
-
 size_t vector_size(vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
@@ -237,6 +218,24 @@ size_t vector_size(vector_t *vector) {
     return vector->size;
 }
 
+size_t vector_width(vector_t *vector) {
+    if (vector == NULL) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    return vector->width;
+}
+
+size_t vector_limit(vector_t *vector) {
+    if (vector == NULL) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    return vector->limit;
+}
+
 size_t vector_capacity(vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
@@ -244,6 +243,25 @@ size_t vector_capacity(vector_t *vector) {
     }
 
     return vector->capacity;
+}
+
+
+bool vector_empty(vector_t *vector) {
+    if (vector == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    return vector->size == 0;
+}
+
+bool vector_full(vector_t *vector) {
+    if (vector == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    return vector->size == vector->limit;
 }
 
 
