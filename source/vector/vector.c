@@ -183,6 +183,47 @@ bool vector_insert(vector_t *vector, const void *data, size_t index) {
     return true;
 }
 
+bool vector_remove(vector_t *vector, void *destination, size_t index) {
+    if (vector == NULL || index >= vector->size) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (destination != NULL) {
+        if (vector_get(vector, destination, index) == false) {
+            // errno set in vector_get()
+            return false;
+        }
+    }
+
+    _data_free(vector, vector->data[index]);
+    vector->size--;
+
+    for (size_t i = index; i < vector->size; i++) {
+        vector->data[i] = vector->data[i + 1];
+    }
+
+    return true;
+}
+
+bool vector_removeall(vector_t *vector, const void *data, int (*compare)(const void *first, const void *second)) {
+    if (vector == NULL || data == NULL || compare == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    for (size_t i = vector->size; i > 0; i--) {
+        if (compare(vector->data[i - 1], data) == 0) {
+            if (vector_remove(vector, NULL, i - 1) == false) {
+                // errno set in vector_remove()
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 
 bool vector_get(vector_t *vector, void *destination, size_t index) {
     if (vector == NULL || destination == NULL || index >= vector->size) {
