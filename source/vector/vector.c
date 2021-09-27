@@ -20,12 +20,18 @@ struct _Vector {
     bool (*clone_data)(const void *source, void *destination);
 };
 
+
 const size_t VECTOR_LIMIT = SIZE_MAX / (2 * sizeof(void *)) - 1;
 
 
 static bool _data_clone(vector_t *vector, const void *data, void *destination);
 static void *_data_construct(vector_t *vector, const void *data);
 static void _data_free(vector_t *vector, void *data);
+
+// vector_sort() auxiliar function and variables
+static int _qsort_compare(const void *first, const void *second);
+static int (*_compare)(const void *first, const void *second);
+static bool _reverse;
 
 
 vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double increment, bool (*clone_data)(const void *source, void *destination), void (*free_data)(void *data)) {
@@ -301,6 +307,21 @@ bool vector_set(vector_t *vector, const void *data, size_t index) {
 }
 
 
+bool vector_sort(vector_t *vector, int (*compare)(const void *first, const void *second), bool reverse) {
+    if (vector == NULL || compare == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    _compare = compare;
+    _reverse = reverse;
+
+    qsort(vector->data, vector->size, sizeof(void *), _qsort_compare);
+
+    return true;
+}
+
+
 size_t vector_size(vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
@@ -406,4 +427,9 @@ static void _data_free(vector_t *vector, void *data) {
 
         free(data);
     }
+}
+
+
+static int _qsort_compare(const void *first, const void *second) {
+    return (_reverse ? -1 : 1) * _compare(*(void **)first, *(void **)second);
 }

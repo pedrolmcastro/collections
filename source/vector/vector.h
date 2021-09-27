@@ -26,6 +26,8 @@ bool vector_removeall(vector_t *vector, const void *data, int (*compare)(const v
 bool vector_get(vector_t *vector, void *destination, size_t index);
 bool vector_set(vector_t *vector, const void *data, size_t index);
 
+bool vector_sort(vector_t *vector, int (*compare)(const void *first, const void *second), bool reverse);
+
 size_t vector_size(vector_t *vector);
 size_t vector_width(vector_t *vector);
 size_t vector_limit(vector_t *vector);
