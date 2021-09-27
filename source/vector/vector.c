@@ -64,6 +64,52 @@ vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double i
     return vector;
 }
 
+vector_t *vector_clone(vector_t *vector) {
+    if (vector == NULL) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    vector_t *clone = vector_construct(vector->width, vector->limit, vector->capacity, vector->increment, vector->clone_data, vector->free_data);
+    if (clone == NULL) {
+        // errno set in vector_construct()
+        return NULL;
+    }
+
+    for (size_t i = 0; i < vector->size; i++) {
+        if (vector_insert(clone, vector->data[i], clone->size) == false) {
+            vector_free(clone);
+            // errno set in vector_insert()
+            return NULL;
+        }
+    }
+
+    return clone;
+}
+
+vector_t *vector_reverse(vector_t *vector) {
+    if (vector == NULL) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    vector_t *reversed = vector_construct(vector->width, vector->limit, vector->capacity, vector->increment, vector->clone_data, vector->free_data);
+    if (reversed == NULL) {
+        // errno set in vector_construct()
+        return NULL;
+    }
+
+    for (size_t i = vector->size; i > 0; i--) {
+        if (vector_insert(reversed, vector->data[i - 1], reversed->size) == false) {
+            vector_free(reversed);
+            // errno set in vector_insert()
+            return NULL;
+        }
+    }
+
+    return reversed;
+}
+
 
 void vector_free(vector_t *vector) {
     if (vector != NULL) {

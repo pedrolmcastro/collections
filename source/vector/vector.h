@@ -10,6 +10,8 @@ extern const size_t VECTOR_LIMIT;
 
 
 vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double increment, bool (*clone_data)(const void *source, void *destination), void (*free_data)(void *data));
+vector_t *vector_clone(vector_t *vector);
+vector_t *vector_reverse(vector_t *vector);
 
 void vector_free(vector_t *vector);
 bool vector_clear(vector_t *vector);
