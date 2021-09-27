@@ -6,8 +6,6 @@
 
 #include "vector.h"
 
-#include <stdio.h>
-
 
 struct _Vector {
     size_t size;
