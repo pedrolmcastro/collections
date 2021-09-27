@@ -6,7 +6,9 @@
 
 
 typedef struct _Vector vector_t;
+
 extern const size_t VECTOR_LIMIT;
+extern const size_t VECTOR_NOT_FOUND;
 
 
 vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double increment, bool (*clone_data)(const void *source, void *destination), void (*free_data)(void *data));
@@ -27,6 +29,8 @@ bool vector_get(vector_t *vector, void *destination, size_t index);
 bool vector_set(vector_t *vector, const void *data, size_t index);
 
 bool vector_sort(vector_t *vector, int (*compare)(const void *first, const void *second), bool reverse);
+bool vector_contains(vector_t *vector, const void *key, int (*compare)(const void *first, const void *second));
+size_t vector_search(vector_t *vector, const void *key, int (*compare)(const void *first, const void *second));
 
 size_t vector_size(vector_t *vector);
 size_t vector_width(vector_t *vector);

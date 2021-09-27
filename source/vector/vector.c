@@ -22,13 +22,14 @@ struct _Vector {
 
 
 const size_t VECTOR_LIMIT = SIZE_MAX / (2 * sizeof(void *)) - 1;
+const size_t VECTOR_NOT_FOUND = SIZE_MAX;
 
 
 static bool _data_clone(vector_t *vector, const void *data, void *destination);
 static void *_data_construct(vector_t *vector, const void *data);
 static void _data_free(vector_t *vector, void *data);
 
-// vector_sort() auxiliar function and variables
+// Auxiliary function and variables for vector_sort()
 static int _qsort_compare(const void *first, const void *second);
 static int (*_compare)(const void *first, const void *second);
 static bool _reverse;
@@ -319,6 +320,36 @@ bool vector_sort(vector_t *vector, int (*compare)(const void *first, const void 
     qsort(vector->data, vector->size, sizeof(void *), _qsort_compare);
 
     return true;
+}
+
+bool vector_contains(vector_t *vector, const void *key, int (*compare)(const void *first, const void *second)) {
+    if (vector == NULL || key == NULL || compare == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    for (size_t i = 0; i < vector->size; i++) {
+        if (compare(vector->data[i], key) == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+size_t vector_search(vector_t *vector, const void *key, int (*compare)(const void *first, const void *second)) {
+    if (vector == NULL || key == NULL || compare == NULL) {
+        errno = EINVAL;
+        return VECTOR_NOT_FOUND;
+    }
+
+    for (size_t i = 0; i < vector->size; i++) {
+        if (compare(vector->data[i], key) == 0) {
+            return i;
+        }
+    }
+
+    return VECTOR_NOT_FOUND;
 }
 
 
