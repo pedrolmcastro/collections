@@ -246,6 +246,7 @@ bool stack_peek(stack_t *stack, void *destination) {
         return false;
     }
 
+    // errno set in _data_clone()
     return _data_clone(stack, stack->data[stack->size - 1], destination);
 }
 
@@ -329,12 +330,12 @@ static bool _data_clone(stack_t *stack, const void *data, void *destination) {
     }
 
     if (stack->clone != NULL) {
+        // errno set in clone()
         return stack->clone(data, destination);
     }
-    else {
-        memcpy(destination, data, stack->width);
-        return true;
-    }
+
+    memcpy(destination, data, stack->width);
+    return true;
 }
 
 static void *_data_construct(stack_t *stack, const void *data) {

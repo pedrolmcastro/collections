@@ -14,13 +14,12 @@ struct _Vector {
     size_t capacity;
     double increment;
     void **data;
-    void (*free_data)(void *data);
-    bool (*clone_data)(const void *source, void *destination);
+    void (*delete)(void *data);
+    bool (*clone)(const void *source, void *destination);
 };
 
 
 const size_t VECTOR_LIMIT = SIZE_MAX / (2 * sizeof(void *)) - 1;
-const size_t VECTOR_NOT_FOUND = SIZE_MAX;
 
 
 static bool _data_clone(vector_t *vector, const void *data, void *destination);
@@ -33,7 +32,7 @@ static int (*_compare)(const void *first, const void *second);
 static bool _reverse;
 
 
-vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double increment, bool (*clone_data)(const void *source, void *destination), void (*free_data)(void *data)) {
+vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double increment, bool (*clone)(const void *source, void *destination), void (*delete)(void *data)) {
     if (width == 0 || limit == 0 || limit > VECTOR_LIMIT || capacity > limit || increment < 1.5) {
         errno = EINVAL;
         return NULL;
@@ -63,8 +62,8 @@ vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double i
     vector->limit = limit;
     vector->capacity = capacity;
     vector->increment = increment;
-    vector->free_data = free_data;
-    vector->clone_data = clone_data;
+    vector->delete = delete;
+    vector->clone = clone;
 
     return vector;
 }
@@ -75,7 +74,7 @@ vector_t *vector_clone(vector_t *vector) {
         return NULL;
     }
 
-    vector_t *clone = vector_construct(vector->width, vector->limit, vector->capacity, vector->increment, vector->clone_data, vector->free_data);
+    vector_t *clone = vector_construct(vector->width, vector->limit, vector->capacity, vector->increment, vector->clone, vector->delete);
     if (clone == NULL) {
         // errno set in vector_construct()
         return NULL;
@@ -98,7 +97,7 @@ vector_t *vector_reverse(vector_t *vector) {
         return NULL;
     }
 
-    vector_t *reversed = vector_construct(vector->width, vector->limit, vector->capacity, vector->increment, vector->clone_data, vector->free_data);
+    vector_t *reversed = vector_construct(vector->width, vector->limit, vector->capacity, vector->increment, vector->clone, vector->delete);
     if (reversed == NULL) {
         // errno set in vector_construct()
         return NULL;
@@ -282,9 +281,8 @@ bool vector_get(vector_t *vector, void *destination, size_t index) {
         return false;
     }
 
-    _data_clone(vector, vector->data[index], destination);
-
-    return true;
+    // errno set in _data_clone()
+    return _data_clone(vector, vector->data[index], destination);
 }
 
 bool vector_set(vector_t *vector, const void *data, size_t index) {
@@ -321,24 +319,14 @@ bool vector_sort(vector_t *vector, int (*compare)(const void *first, const void 
 }
 
 bool vector_contains(vector_t *vector, const void *key, int (*compare)(const void *first, const void *second)) {
-    if (vector == NULL || key == NULL || compare == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    for (size_t i = 0; i < vector->size; i++) {
-        if (compare(vector->data[i], key) == 0) {
-            return true;
-        }
-    }
-
-    return false;
+    // errno set in vector_search()
+    return vector_search(vector, key, compare) != SIZE_MAX;
 }
 
 size_t vector_search(vector_t *vector, const void *key, int (*compare)(const void *first, const void *second)) {
     if (vector == NULL || key == NULL || compare == NULL) {
         errno = EINVAL;
-        return VECTOR_NOT_FOUND;
+        return SIZE_MAX;
     }
 
     for (size_t i = 0; i < vector->size; i++) {
@@ -347,7 +335,7 @@ size_t vector_search(vector_t *vector, const void *key, int (*compare)(const voi
         }
     }
 
-    return VECTOR_NOT_FOUND;
+    return SIZE_MAX;
 }
 
 
@@ -413,13 +401,13 @@ static bool _data_clone(vector_t *vector, const void *data, void *destination) {
         return false;
     }
 
-    if (vector->clone_data != NULL) {
-        return vector->clone_data(data, destination);
+    if (vector->clone != NULL) {
+        // errno set in clone()
+        return vector->clone(data, destination);
     }
-    else {
-        memcpy(destination, data, vector->width);
-        return true;
-    }
+
+    memcpy(destination, data, vector->width);
+    return true;
 }
 
 static void *_data_construct(vector_t *vector, const void *data) {
@@ -435,7 +423,7 @@ static void *_data_construct(vector_t *vector, const void *data) {
     }
 
     if (_data_clone(vector, data, new) == false) {
-        _data_free(vector, new);
+        free(new);
         // errno set in _data_clone()
         return NULL;
     }
@@ -450,8 +438,8 @@ static void _data_free(vector_t *vector, void *data) {
     }
 
     if (data != NULL) {
-        if (vector->free_data != NULL) {
-            vector->free_data(data);
+        if (vector->delete != NULL) {
+            vector->delete(data);
         }
 
         free(data);

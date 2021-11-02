@@ -6,7 +6,6 @@
 
 
 typedef struct _Stack stack_t;
-
 extern const size_t STACK_LIMIT;
 
 

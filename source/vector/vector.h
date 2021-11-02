@@ -6,9 +6,7 @@
 
 
 typedef struct _Vector vector_t;
-
 extern const size_t VECTOR_LIMIT;
-extern const size_t VECTOR_NOT_FOUND;
 
 
 vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double increment, bool (*clone_data)(const void *source, void *destination), void (*free_data)(void *data));
