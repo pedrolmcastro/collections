@@ -57,8 +57,8 @@ stack_t *stack_construct(size_t width, size_t limit, size_t capacity, double inc
     stack->limit = limit;
     stack->capacity = capacity;
     stack->increment = increment;
-    stack->delete = delete;
     stack->clone = clone;
+    stack->delete = delete;
 
     return stack;
 }
@@ -223,16 +223,14 @@ bool stack_push(stack_t *stack, const void *data) {
 }
 
 bool stack_pop(stack_t *stack, void *destination) {
-    if (stack == NULL) {
+    if (stack == NULL || stack_empty(stack)) {
         errno = EINVAL;
         return false;
     }
 
-    if (destination != NULL) {
-        if (stack_peek(stack, destination) == false) {
-            // errno set in stack_peek()
-            return false;
-        }
+    if (destination != NULL && stack_peek(stack, destination) == false) {
+        // errno set in stack_peek()
+        return false;
     }
 
     _data_free(stack, stack->data[--stack->size]);
@@ -241,7 +239,7 @@ bool stack_pop(stack_t *stack, void *destination) {
 }
 
 bool stack_peek(stack_t *stack, void *destination) {
-    if (stack == NULL || destination == NULL) {
+    if (stack == NULL || destination == NULL || stack_empty(stack)) {
         errno = EINVAL;
         return false;
     }
@@ -251,7 +249,7 @@ bool stack_peek(stack_t *stack, void *destination) {
 }
 
 
-bool stack_contains(stack_t *stack, const void *key, int (*compare)(const void *first, const void *second)) {
+bool stack_contains(stack_t *stack, const void *key, int (*compare)(const void *data, const void *key)) {
     if (stack == NULL || key == NULL || compare == NULL) {
         errno = EINVAL;
         return false;
@@ -301,6 +299,15 @@ size_t stack_capacity(stack_t *stack) {
     }
 
     return stack->capacity;
+}
+
+double stack_increment(stack_t *stack) {
+    if (stack == NULL) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    return stack->increment;
 }
 
 

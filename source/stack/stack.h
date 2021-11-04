@@ -23,12 +23,13 @@ bool stack_push(stack_t *stack, const void *data);
 bool stack_pop(stack_t *stack, void *destination);
 bool stack_peek(stack_t *stack, void *destination);
 
-bool stack_contains(stack_t *stack, const void *key, int (*compare)(const void *first, const void *second));
+bool stack_contains(stack_t *stack, const void *key, int (*compare)(const void *data, const void *key));
 
 size_t stack_size(stack_t *stack);
 size_t stack_width(stack_t *stack);
 size_t stack_limit(stack_t *stack);
 size_t stack_capacity(stack_t *stack);
+double stack_increment(stack_t *stack);
 
 bool stack_empty(stack_t *stack);
 bool stack_full(stack_t *stack);
