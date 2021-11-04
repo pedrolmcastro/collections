@@ -26,7 +26,7 @@ static bool _data_clone(vector_t *vector, const void *data, void *destination);
 static void *_data_construct(vector_t *vector, const void *data);
 static void _data_free(vector_t *vector, void *data);
 
-// Auxiliary function and variables for vector_sort()
+// Auxiliary functions and variables for vector_sort()
 static int _qsort_compare(const void *first, const void *second);
 static int (*_compare)(const void *first, const void *second);
 static bool _reverse;
@@ -62,8 +62,8 @@ vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double i
     vector->limit = limit;
     vector->capacity = capacity;
     vector->increment = increment;
-    vector->delete = delete;
     vector->clone = clone;
+    vector->delete = delete;
 
     return vector;
 }
@@ -256,14 +256,14 @@ bool vector_remove(vector_t *vector, void *destination, size_t index) {
     return true;
 }
 
-bool vector_removeall(vector_t *vector, const void *data, int (*compare)(const void *first, const void *second)) {
-    if (vector == NULL || data == NULL || compare == NULL) {
+bool vector_removeall(vector_t *vector, const void *remove, int (*compare)(const void *data, const void *remove)) {
+    if (vector == NULL || remove == NULL || compare == NULL) {
         errno = EINVAL;
         return false;
     }
 
     for (size_t i = vector->size; i > 0; i--) {
-        if (compare(vector->data[i - 1], data) == 0) {
+        if (compare(vector->data[i - 1], remove) == 0) {
             if (vector_remove(vector, NULL, i - 1) == false) {
                 // errno set in vector_remove()
                 return false;
@@ -304,26 +304,27 @@ bool vector_set(vector_t *vector, const void *data, size_t index) {
 }
 
 
-bool vector_sort(vector_t *vector, int (*compare)(const void *first, const void *second), bool reverse) {
+bool vector_sort(vector_t *vector, bool reverse, int (*compare)(const void *first, const void *second)) {
     if (vector == NULL || compare == NULL) {
         errno = EINVAL;
         return false;
     }
 
-    _compare = compare;
     _reverse = reverse;
+    _compare = compare;
 
     qsort(vector->data, vector->size, sizeof(void *), _qsort_compare);
 
     return true;
 }
 
-bool vector_contains(vector_t *vector, const void *key, int (*compare)(const void *first, const void *second)) {
+
+bool vector_contains(vector_t *vector, const void *key, int (*compare)(const void *data, const void *key)) {
     // errno set in vector_search()
     return vector_search(vector, key, compare) != SIZE_MAX;
 }
 
-size_t vector_search(vector_t *vector, const void *key, int (*compare)(const void *first, const void *second)) {
+size_t vector_search(vector_t *vector, const void *key, int (*compare)(const void *data, const void *key)) {
     if (vector == NULL || key == NULL || compare == NULL) {
         errno = EINVAL;
         return SIZE_MAX;
@@ -373,6 +374,15 @@ size_t vector_capacity(vector_t *vector) {
     }
 
     return vector->capacity;
+}
+
+double vector_increment(vector_t *vector) {
+    if (vector == NULL) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    return vector->increment;
 }
 
 
