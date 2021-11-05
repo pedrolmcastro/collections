@@ -19,12 +19,12 @@ bool vector_clear(vector_t *vector);
 bool vector_reserve(vector_t *vector, size_t size);
 bool vector_trim(vector_t *vector);
 
-bool vector_insert(vector_t *vector, const void *data, size_t index);
-bool vector_remove(vector_t *vector, void *destination, size_t index);
+bool vector_insert(vector_t *vector, size_t index, const void *data);
+bool vector_remove(vector_t *vector, size_t index, void *destination);
 bool vector_removeall(vector_t *vector, const void *remove, int (*compare)(const void *data, const void *remove));
 
-bool vector_get(vector_t *vector, void *destination, size_t index);
-bool vector_set(vector_t *vector, const void *data, size_t index);
+bool vector_get(vector_t *vector, size_t index, void *destination);
+bool vector_set(vector_t *vector, size_t index, const void *data);
 
 bool vector_sort(vector_t *vector, bool reverse, int (*compare)(const void *first, const void *second));
 

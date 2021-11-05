@@ -128,8 +128,9 @@ bool deque_unshift(deque_t *deque, const void *data) {
         deque->back = new;
     }
     else {
-        deque->front->previous = new;
         new->next = deque->front;
+
+        deque->front->previous = new;
         deque->front = new;
     }
 
@@ -198,8 +199,9 @@ bool deque_push(deque_t *deque, const void *data) {
         deque->back = new;
     }
     else {
-        deque->back->next = new;
         new->previous = deque->back;
+
+        deque->back->next = new;
         deque->back = new;
     }
 
