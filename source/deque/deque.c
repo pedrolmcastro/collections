@@ -91,6 +91,7 @@ bool deque_clear(deque_t *deque) {
     }
 
     _node_t *node = deque->front;
+    
     while (node != NULL) {
         _node_t *remove = node;
         node = node->next;

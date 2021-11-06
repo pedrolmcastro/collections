@@ -125,6 +125,7 @@ bool queue_clear(queue_t *queue) {
     }
 
     _node_t *node = queue->front;
+    
     while (node != NULL) {
         _node_t *remove = node;
         node = node->next;
