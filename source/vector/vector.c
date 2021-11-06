@@ -33,7 +33,7 @@ static bool _reverse;
 
 
 vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double increment, bool (*clone)(const void *source, void *destination), void (*delete)(void *data)) {
-    if (width == 0 || limit == 0 || limit > VECTOR_LIMIT || capacity > limit || increment < 1.5) {
+    if (width == 0 || limit == 0 || limit > VECTOR_LIMIT || capacity > limit || increment < 2) {
         errno = EINVAL;
         return NULL;
     }
