@@ -1,9 +1,9 @@
+#include "deque.h"
+
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-
-#include "deque.h"
 
 
 typedef struct _Node {

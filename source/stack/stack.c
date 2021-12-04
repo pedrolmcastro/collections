@@ -1,10 +1,10 @@
+#include "stack.h"
+
 #include <errno.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
-
-#include "stack.h"
 
 
 struct _Stack {

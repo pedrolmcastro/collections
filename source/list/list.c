@@ -1,10 +1,10 @@
+#include "list.h"
+
 #include <errno.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
-
-#include "list.h"
 
 
 typedef struct _Node {
