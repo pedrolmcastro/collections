@@ -7,7 +7,7 @@
 
 
 typedef struct _Node {
-    void *data;
+    void *value;
     struct _Node *next;
 }
 _node_t;
@@ -18,17 +18,17 @@ struct _Queue {
     size_t size;
     size_t width;
     size_t limit;
-    void (*delete)(void *data);
-    bool (*clone)(const void *source, void *destination);
+    void (*free_)(void *value);
+    bool (*copy)(const void *source, void *destination);
 };
 
 
-static bool _data_clone(queue_t *queue, const void *data, void *destination);
-static _node_t *_node_construct(queue_t *queue, const void *data);
+static bool _value_copy(queue_t *queue, const void *value, void *destination);
+static _node_t *_node_construct(queue_t *queue, const void *value);
 static void _node_free(queue_t *queue, _node_t *node);
 
 
-queue_t *queue_construct(size_t width, size_t limit, bool (*clone)(const void *source, void *destination), void (*delete)(void *data)) {
+queue_t *queue_construct(size_t width, size_t limit, bool (*copy)(const void *source, void *destination), void (*free_)(void *value)) {
     if (width == 0 || limit == 0) {
         errno = EINVAL;
         return NULL;
@@ -46,33 +46,33 @@ queue_t *queue_construct(size_t width, size_t limit, bool (*clone)(const void *s
 
     queue->width = width;
     queue->limit = limit;
-    queue->clone = clone;
-    queue->delete = delete;
+    queue->copy = copy;
+    queue->free_ = free_;
 
     return queue;
 }
 
-queue_t *queue_clone(queue_t *queue) {
+queue_t *queue_copy(queue_t *queue) {
     if (queue == NULL) {
         errno = EINVAL;
         return NULL;
     }
 
-    queue_t *clone = queue_construct(queue->width, queue->limit, queue->clone, queue->delete);
-    if (clone == NULL) {
+    queue_t *copy = queue_construct(queue->width, queue->limit, queue->copy, queue->free_);
+    if (copy == NULL) {
         // errno set in queue_construct()
         return NULL;
     }
 
     for (_node_t *node = queue->front; node != NULL; node = node->next) {
-        if (queue_enqueue(clone, node->data) == false) {
-            queue_free(clone);
+        if (queue_enqueue(copy, node->value) == false) {
+            queue_free(copy);
             // errno set in queue_enqueue()
             return NULL;
         }
     }
 
-    return clone;
+    return copy;
 }
 
 queue_t *queue_reverse(queue_t *queue) {
@@ -81,14 +81,14 @@ queue_t *queue_reverse(queue_t *queue) {
         return NULL;
     }
 
-    queue_t *reversed = queue_construct(queue->width, queue->limit, queue->clone, queue->delete);
+    queue_t *reversed = queue_construct(queue->width, queue->limit, queue->copy, queue->free_);
     if (reversed == NULL) {
         // errno set in queue_construct()
         return NULL;
     }
 
     for (_node_t *node = queue->front; node != NULL; node = node->next) {
-        _node_t *new = _node_construct(reversed, node->data);
+        _node_t *new = _node_construct(reversed, node->value);
         if (new == NULL) {
             queue_free(reversed);
             // errno set in _node_construct()
@@ -141,8 +141,8 @@ bool queue_clear(queue_t *queue) {
 }
 
 
-bool queue_enqueue(queue_t *queue, const void *data) {
-    if (queue == NULL || data == NULL) {
+bool queue_enqueue(queue_t *queue, const void *value) {
+    if (queue == NULL || value == NULL) {
         errno = EINVAL;
         return false;
     }
@@ -152,7 +152,7 @@ bool queue_enqueue(queue_t *queue, const void *data) {
         return false;
     }
 
-    _node_t *new = _node_construct(queue, data);
+    _node_t *new = _node_construct(queue, value);
     if (new == NULL) {
         // errno set in _node_construct()
         return false;
@@ -202,19 +202,19 @@ bool queue_peek(queue_t *queue, void *destination) {
         return false;
     }
 
-    // errno set in _data_clone()
-    return _data_clone(queue, queue->front->data, destination);
+    // errno set in _value_copy()
+    return _value_copy(queue, queue->front->value, destination);
 }
 
 
-bool queue_contains(queue_t *queue, const void *key, int (*compare)(const void *data, const void *key)) {
+bool queue_contains(queue_t *queue, const void *key, int (*compare)(const void *value, const void *key)) {
     if (queue == NULL || key == NULL || compare == NULL) {
         errno = EINVAL;
         return false;
     }
 
     for (_node_t *node = queue->front; node != NULL; node = node->next) {
-        if (compare(node->data, key) == 0) {
+        if (compare(node->value, key) == 0) {
             return true;
         }
     }
@@ -270,23 +270,23 @@ bool queue_full(queue_t *queue) {
 }
 
 
-static bool _data_clone(queue_t *queue, const void *data, void *destination) {
-    if (queue == NULL || data == NULL || destination == NULL) {
+static bool _value_copy(queue_t *queue, const void *value, void *destination) {
+    if (queue == NULL || value == NULL || destination == NULL) {
         errno = EINVAL;
         return false;
     }
 
-    if (queue->clone != NULL) {
-        // errno set in clone()
-        return queue->clone(data, destination);
+    if (queue->copy != NULL) {
+        // errno set in copy()
+        return queue->copy(value, destination);
     }
 
-    memcpy(destination, data, queue->width);
+    memcpy(destination, value, queue->width);
     return true;
 }
 
-static _node_t *_node_construct(queue_t *queue, const void *data) {
-    if (queue == NULL || data == NULL) {
+static _node_t *_node_construct(queue_t *queue, const void *value) {
+    if (queue == NULL || value == NULL) {
         errno = EINVAL;
         return NULL;
     }
@@ -297,17 +297,17 @@ static _node_t *_node_construct(queue_t *queue, const void *data) {
         return NULL;
     }
 
-    new->data = malloc(queue->width);
-    if (new->data == NULL) {
+    new->value = malloc(queue->width);
+    if (new->value == NULL) {
         free(new);
         errno = ENOMEM;
         return NULL;
     }
 
-    if (_data_clone(queue, data, new->data) == false) {
-        free(new->data);
+    if (_value_copy(queue, value, new->value) == false) {
+        free(new->value);
         free(new);
-        // errno set in _data_clone()
+        // errno set in _value_copy()
         return NULL;
     }
 
@@ -323,11 +323,11 @@ static void _node_free(queue_t *queue, _node_t *node) {
     }
 
     if (node != NULL) {
-        if (queue->delete != NULL) {
-            queue->delete(node->data);
+        if (queue->free_ != NULL) {
+            queue->free_(node->value);
         }
 
-        free(node->data);
+        free(node->value);
         free(node);
     }
 }

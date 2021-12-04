@@ -12,23 +12,23 @@ struct _Stack {
     size_t width;
     size_t limit;
     size_t capacity;
-    double increment;
-    void **data;
-    void (*delete)(void *data);
-    bool (*clone)(const void *source, void *destination);
+    double growth;
+    void **values;
+    void (*free_)(void *value);
+    bool (*copy)(const void *source, void *destination);
 };
 
 
 const size_t STACK_LIMIT = SIZE_MAX / (2 * sizeof(void *)) - 1;
 
 
-static bool _data_clone(stack_t *stack, const void *data, void *destination);
-static void *_data_construct(stack_t *stack, const void *data);
-static void _data_free(stack_t *stack, void *data);
+static bool _value_copy(stack_t *stack, const void *value, void *destination);
+static void *_value_construct(stack_t *stack, const void *value);
+static void _value_free(stack_t *stack, void *value);
 
 
-stack_t *stack_construct(size_t width, size_t limit, size_t capacity, double increment, bool (*clone)(const void *source, void *destination), void (*delete)(void *data)) {
-    if (width == 0 || limit == 0 || limit > STACK_LIMIT || capacity > limit || increment < 2) {
+stack_t *stack_construct(size_t width, size_t limit, size_t capacity, double growth, bool (*copy)(const void *source, void *destination), void (*free_)(void *value)) {
+    if (width == 0 || limit == 0 || limit > STACK_LIMIT || capacity > limit || growth < 2) {
         errno = EINVAL;
         return NULL;
     }
@@ -40,15 +40,15 @@ stack_t *stack_construct(size_t width, size_t limit, size_t capacity, double inc
     }
 
     if (capacity > 0) {
-        stack->data = malloc(capacity * sizeof(void *));
-        if (stack->data == NULL) {
+        stack->values = malloc(capacity * sizeof(void *));
+        if (stack->values == NULL) {
             stack_free(stack);
             errno = ENOMEM;
             return NULL;
         }
     }
     else {
-        stack->data = NULL;
+        stack->values = NULL;
     }
 
     stack->size = 0;
@@ -56,34 +56,34 @@ stack_t *stack_construct(size_t width, size_t limit, size_t capacity, double inc
     stack->width = width;
     stack->limit = limit;
     stack->capacity = capacity;
-    stack->increment = increment;
-    stack->clone = clone;
-    stack->delete = delete;
+    stack->growth = growth;
+    stack->copy = copy;
+    stack->free_ = free_;
 
     return stack;
 }
 
-stack_t *stack_clone(stack_t *stack) {
+stack_t *stack_copy(stack_t *stack) {
     if (stack == NULL) {
         errno = EINVAL;
         return NULL;
     }
 
-    stack_t *clone = stack_construct(stack->width, stack->limit, stack->capacity, stack->increment, stack->clone, stack->delete);
-    if (clone == NULL) {
+    stack_t *copy = stack_construct(stack->width, stack->limit, stack->capacity, stack->growth, stack->copy, stack->free_);
+    if (copy == NULL) {
         // errno set in stack_construct()
         return NULL;
     }
 
     for (size_t i = 0; i < stack->size; i++) {
-        if (stack_push(clone, stack->data[i]) == false) {
-            stack_free(clone);
+        if (stack_push(copy, stack->values[i]) == false) {
+            stack_free(copy);
             // errno set in stack_push()
             return NULL;
         }
     }
     
-    return clone;
+    return copy;
 }
 
 stack_t *stack_reverse(stack_t *stack) {
@@ -92,14 +92,14 @@ stack_t *stack_reverse(stack_t *stack) {
         return NULL;
     }
 
-    stack_t *reversed = stack_construct(stack->width, stack->limit, stack->capacity, stack->increment, stack->clone, stack->delete);
+    stack_t *reversed = stack_construct(stack->width, stack->limit, stack->capacity, stack->growth, stack->copy, stack->free_);
     if (reversed == NULL) {
         // errno set in stack_construct()
         return NULL;
     }
 
     for (size_t i = stack->size; i > 0; i--) {
-        if (stack_push(reversed, stack->data[i - 1]) == false) {
+        if (stack_push(reversed, stack->values[i - 1]) == false) {
             stack_free(reversed);
             // errno set in stack_push()
             return NULL;
@@ -124,7 +124,7 @@ bool stack_clear(stack_t *stack) {
     }
 
     for (size_t i = 0; i < stack->size; i++) {
-        _data_free(stack, stack->data[i]);
+        _value_free(stack, stack->values[i]);
     }
 
     stack->size = 0;
@@ -145,7 +145,7 @@ bool stack_reserve(stack_t *stack, size_t size) {
 
     size_t capacity = stack->capacity == 0 ? 1 : stack->capacity;
     while (capacity < size) {
-        capacity *= stack->increment;
+        capacity *= stack->growth;
 
         if (capacity > stack->limit) {
             capacity = stack->limit;
@@ -157,13 +157,13 @@ bool stack_reserve(stack_t *stack, size_t size) {
         }
     }
 
-    void **data = realloc(stack->data, capacity * sizeof(void *));
-    if (data == NULL) {
+    void **values = realloc(stack->values, capacity * sizeof(void *));
+    if (values == NULL) {
         errno = ENOMEM;
         return false;
     }
 
-    stack->data = data;
+    stack->values = values;
     stack->capacity = capacity;
 
     return true;
@@ -176,17 +176,17 @@ bool stack_trim(stack_t *stack) {
     }
 
     if (stack_empty(stack)) {
-        free(stack->data);
-        stack->data = NULL;
+        free(stack->values);
+        stack->values = NULL;
     }
     else {
-        void **data = realloc(stack->data, stack->size * sizeof(void *));
-        if (data == NULL) {
+        void **values = realloc(stack->values, stack->size * sizeof(void *));
+        if (values == NULL) {
             errno = ENOMEM;
             return false;
         }
 
-        stack->data = data;
+        stack->values = values;
     }
 
     stack->capacity = stack->size;
@@ -195,8 +195,8 @@ bool stack_trim(stack_t *stack) {
 }
 
 
-bool stack_push(stack_t *stack, const void *data) {
-    if (stack == NULL || data == NULL) {
+bool stack_push(stack_t *stack, const void *value) {
+    if (stack == NULL || value == NULL) {
         errno = EINVAL;
         return false;
     }
@@ -211,13 +211,13 @@ bool stack_push(stack_t *stack, const void *data) {
         return false;
     }
 
-    void *new = _data_construct(stack, data);
+    void *new = _value_construct(stack, value);
     if (new == NULL) {
-        // errno set in _data_construct()
+        // errno set in _value_construct()
         return false;
     }
 
-    stack->data[stack->size++] = new;
+    stack->values[stack->size++] = new;
 
     return true;
 }
@@ -233,7 +233,7 @@ bool stack_pop(stack_t *stack, void *destination) {
         return false;
     }
 
-    _data_free(stack, stack->data[--stack->size]);
+    _value_free(stack, stack->values[--stack->size]);
 
     return true;
 }
@@ -244,19 +244,19 @@ bool stack_peek(stack_t *stack, void *destination) {
         return false;
     }
 
-    // errno set in _data_clone()
-    return _data_clone(stack, stack->data[stack->size - 1], destination);
+    // errno set in _value_copy()
+    return _value_copy(stack, stack->values[stack->size - 1], destination);
 }
 
 
-bool stack_contains(stack_t *stack, const void *key, int (*compare)(const void *data, const void *key)) {
+bool stack_contains(stack_t *stack, const void *key, int (*compare)(const void *value, const void *key)) {
     if (stack == NULL || key == NULL || compare == NULL) {
         errno = EINVAL;
         return false;
     }
 
     for (size_t i = 0; i < stack->size; i++) {
-        if (compare(stack->data[i], key) == 0) {
+        if (compare(stack->values[i], key) == 0) {
             return true;
         }
     }
@@ -301,13 +301,13 @@ size_t stack_capacity(stack_t *stack) {
     return stack->capacity;
 }
 
-double stack_increment(stack_t *stack) {
+double stack_growth(stack_t *stack) {
     if (stack == NULL) {
         errno = EINVAL;
         return 0;
     }
 
-    return stack->increment;
+    return stack->growth;
 }
 
 
@@ -330,23 +330,23 @@ bool stack_full(stack_t *stack) {
 }
 
 
-static bool _data_clone(stack_t *stack, const void *data, void *destination) {
-    if (stack == NULL || data == NULL || destination == NULL) {
+static bool _value_copy(stack_t *stack, const void *value, void *destination) {
+    if (stack == NULL || value == NULL || destination == NULL) {
         errno = EINVAL;
         return false;
     }
 
-    if (stack->clone != NULL) {
-        // errno set in clone()
-        return stack->clone(data, destination);
+    if (stack->copy != NULL) {
+        // errno set in copy()
+        return stack->copy(value, destination);
     }
 
-    memcpy(destination, data, stack->width);
+    memcpy(destination, value, stack->width);
     return true;
 }
 
-static void *_data_construct(stack_t *stack, const void *data) {
-    if (stack == NULL || data == NULL) {
+static void *_value_construct(stack_t *stack, const void *value) {
+    if (stack == NULL || value == NULL) {
         errno = EINVAL;
         return NULL;
     }
@@ -357,26 +357,26 @@ static void *_data_construct(stack_t *stack, const void *data) {
         return NULL;
     }
 
-    if (_data_clone(stack, data, new) == false) {
+    if (_value_copy(stack, value, new) == false) {
         free(new);
-        // errno set in _data_clone()
+        // errno set in _value_copy()
         return NULL;
     }
 
     return new;
 }
 
-static void _data_free(stack_t *stack, void *data) {
+static void _value_free(stack_t *stack, void *value) {
     if (stack == NULL) {
         errno = EINVAL;
         return;
     }
 
-    if (data != NULL) {
-        if (stack->delete != NULL) {
-            stack->delete(data);
+    if (value != NULL) {
+        if (stack->free_ != NULL) {
+            stack->free_(value);
         }
 
-        free(data);
+        free(value);
     }
 }

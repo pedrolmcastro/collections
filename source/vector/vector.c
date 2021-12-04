@@ -12,19 +12,19 @@ struct _Vector {
     size_t width;
     size_t limit;
     size_t capacity;
-    double increment;
-    void **data;
-    void (*delete)(void *data);
-    bool (*clone)(const void *source, void *destination);
+    double growth;
+    void **values;
+    void (*free_)(void *value);
+    bool (*copy)(const void *source, void *destination);
 };
 
 
 const size_t VECTOR_LIMIT = SIZE_MAX / (2 * sizeof(void *)) - 1;
 
 
-static bool _data_clone(vector_t *vector, const void *data, void *destination);
-static void *_data_construct(vector_t *vector, const void *data);
-static void _data_free(vector_t *vector, void *data);
+static bool _value_copy(vector_t *vector, const void *value, void *destination);
+static void *_value_construct(vector_t *vector, const void *value);
+static void _value_free(vector_t *vector, void *value);
 
 // Auxiliary functions and variables for vector_sort()
 static int _qsort_compare(const void *first, const void *second);
@@ -32,8 +32,8 @@ static int (*_compare)(const void *first, const void *second);
 static bool _reverse;
 
 
-vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double increment, bool (*clone)(const void *source, void *destination), void (*delete)(void *data)) {
-    if (width == 0 || limit == 0 || limit > VECTOR_LIMIT || capacity > limit || increment < 2) {
+vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double growth, bool (*copy)(const void *source, void *destination), void (*free_)(void *value)) {
+    if (width == 0 || limit == 0 || limit > VECTOR_LIMIT || capacity > limit || growth < 2) {
         errno = EINVAL;
         return NULL;
     }
@@ -45,15 +45,15 @@ vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double i
     }
 
     if (capacity > 0) {
-        vector->data = malloc(capacity * sizeof(void *));
-        if (vector->data == NULL) {
+        vector->values = malloc(capacity * sizeof(void *));
+        if (vector->values == NULL) {
             vector_free(vector);
             errno = ENOMEM;
             return NULL;
         }
     }
     else {
-        vector->data = NULL;
+        vector->values = NULL;
     }
 
     vector->size = 0;
@@ -61,34 +61,34 @@ vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double i
     vector->width = width;
     vector->limit = limit;
     vector->capacity = capacity;
-    vector->increment = increment;
-    vector->clone = clone;
-    vector->delete = delete;
+    vector->growth = growth;
+    vector->copy = copy;
+    vector->free_ = free_;
 
     return vector;
 }
 
-vector_t *vector_clone(vector_t *vector) {
+vector_t *vector_copy(vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
         return NULL;
     }
 
-    vector_t *clone = vector_construct(vector->width, vector->limit, vector->capacity, vector->increment, vector->clone, vector->delete);
-    if (clone == NULL) {
+    vector_t *copy = vector_construct(vector->width, vector->limit, vector->capacity, vector->growth, vector->copy, vector->free_);
+    if (copy == NULL) {
         // errno set in vector_construct()
         return NULL;
     }
 
     for (size_t i = 0; i < vector->size; i++) {
-        if (vector_insert(clone, clone->size, vector->data[i]) == false) {
-            vector_free(clone);
+        if (vector_insert(copy, copy->size, vector->values[i]) == false) {
+            vector_free(copy);
             // errno set in vector_insert()
             return NULL;
         }
     }
 
-    return clone;
+    return copy;
 }
 
 vector_t *vector_reverse(vector_t *vector) {
@@ -97,14 +97,14 @@ vector_t *vector_reverse(vector_t *vector) {
         return NULL;
     }
 
-    vector_t *reversed = vector_construct(vector->width, vector->limit, vector->capacity, vector->increment, vector->clone, vector->delete);
+    vector_t *reversed = vector_construct(vector->width, vector->limit, vector->capacity, vector->growth, vector->copy, vector->free_);
     if (reversed == NULL) {
         // errno set in vector_construct()
         return NULL;
     }
 
     for (size_t i = vector->size; i > 0; i--) {
-        if (vector_insert(reversed, reversed->size, vector->data[i - 1]) == false) {
+        if (vector_insert(reversed, reversed->size, vector->values[i - 1]) == false) {
             vector_free(reversed);
             // errno set in vector_insert()
             return NULL;
@@ -130,7 +130,7 @@ bool vector_clear(vector_t *vector) {
     }
 
     for (size_t i = 0; i < vector->size; i++) {
-        _data_free(vector, vector->data[i]);
+        _value_free(vector, vector->values[i]);
     }
 
     vector->size = 0;
@@ -151,7 +151,7 @@ bool vector_reserve(vector_t *vector, size_t size) {
 
     size_t capacity = vector->capacity == 0 ? 1 : vector->capacity;
     while (capacity < size) {
-        capacity *= vector->increment;
+        capacity *= vector->growth;
 
         if (capacity > vector->limit) {
             capacity = vector->limit;
@@ -163,13 +163,13 @@ bool vector_reserve(vector_t *vector, size_t size) {
         }
     }
 
-    void **data = realloc(vector->data, capacity * sizeof(void *));
-    if (data == NULL) {
+    void **values = realloc(vector->values, capacity * sizeof(void *));
+    if (values == NULL) {
         errno = ENOMEM;
         return false;
     }
 
-    vector->data = data;
+    vector->values = values;
     vector->capacity = capacity;
 
     return true;
@@ -182,17 +182,17 @@ bool vector_trim(vector_t *vector) {
     }
 
     if (vector_empty(vector)) {
-        free(vector->data);
-        vector->data = NULL;
+        free(vector->values);
+        vector->values = NULL;
     }
     else {
-        void **data = realloc(vector->data, vector->size * sizeof(void *));
-        if (data == NULL) {
+        void **values = realloc(vector->values, vector->size * sizeof(void *));
+        if (values == NULL) {
             errno = ENOMEM;
             return false;
         }
 
-        vector->data = data;
+        vector->values = values;
     }
 
     vector->capacity = vector->size;
@@ -201,8 +201,8 @@ bool vector_trim(vector_t *vector) {
 }
 
 
-bool vector_insert(vector_t *vector, size_t index, const void *data) {
-    if (vector == NULL || data == NULL || index > vector->size) {
+bool vector_insert(vector_t *vector, size_t index, const void *value) {
+    if (vector == NULL || value == NULL || index > vector->size) {
         errno = EINVAL;
         return false;
     }
@@ -217,17 +217,17 @@ bool vector_insert(vector_t *vector, size_t index, const void *data) {
         return false;
     }
 
-    void *new = _data_construct(vector, data);
+    void *new = _value_construct(vector, value);
     if (new == NULL) {
-        // errno set in _data_construct()
+        // errno set in _value_construct()
         return false;
     }
 
     for (size_t i = vector->size; i > index; i--) {
-        vector->data[i] = vector->data[i - 1];
+        vector->values[i] = vector->values[i - 1];
     }
 
-    vector->data[index] = new;
+    vector->values[index] = new;
     vector->size++;
 
     return true;
@@ -244,24 +244,24 @@ bool vector_remove(vector_t *vector, size_t index, void *destination) {
         return false;
     }
 
-    _data_free(vector, vector->data[index]);
+    _value_free(vector, vector->values[index]);
     vector->size--;
 
     for (size_t i = index; i < vector->size; i++) {
-        vector->data[i] = vector->data[i + 1];
+        vector->values[i] = vector->values[i + 1];
     }
 
     return true;
 }
 
-bool vector_removeall(vector_t *vector, const void *remove, int (*compare)(const void *data, const void *remove)) {
+bool vector_removeall(vector_t *vector, const void *remove, int (*compare)(const void *value, const void *remove)) {
     if (vector == NULL || remove == NULL || compare == NULL) {
         errno = EINVAL;
         return false;
     }
 
     for (size_t i = vector->size; i > 0; i--) {
-        if (compare(vector->data[i - 1], remove) == 0) {
+        if (compare(vector->values[i - 1], remove) == 0) {
             if (vector_remove(vector, i - 1, NULL) == false) {
                 // errno set in vector_remove()
                 return false;
@@ -279,24 +279,24 @@ bool vector_get(vector_t *vector, size_t index, void *destination) {
         return false;
     }
 
-    // errno set in _data_clone()
-    return _data_clone(vector, vector->data[index], destination);
+    // errno set in _value_copy()
+    return _value_copy(vector, vector->values[index], destination);
 }
 
-bool vector_set(vector_t *vector, size_t index, const void *data) {
-    if (vector == NULL || data == NULL || index >= vector->size) {
+bool vector_set(vector_t *vector, size_t index, const void *value) {
+    if (vector == NULL || value == NULL || index >= vector->size) {
         errno = EINVAL;
         return false;
     }
 
-    void *new = _data_construct(vector, data);
+    void *new = _value_construct(vector, value);
     if (new == NULL) {
-        // errno set in _data_construct()
+        // errno set in _value_construct()
         return false;
     }
 
-    _data_free(vector, vector->data[index]);
-    vector->data[index] = new;
+    _value_free(vector, vector->values[index]);
+    vector->values[index] = new;
 
     return true;
 }
@@ -311,25 +311,25 @@ bool vector_sort(vector_t *vector, bool reverse, int (*compare)(const void *firs
     _reverse = reverse;
     _compare = compare;
 
-    qsort(vector->data, vector->size, sizeof(void *), _qsort_compare);
+    qsort(vector->values, vector->size, sizeof(void *), _qsort_compare);
 
     return true;
 }
 
 
-bool vector_contains(vector_t *vector, const void *key, int (*compare)(const void *data, const void *key)) {
+bool vector_contains(vector_t *vector, const void *key, int (*compare)(const void *value, const void *key)) {
     // errno set in vector_search()
     return vector_search(vector, key, compare) != SIZE_MAX;
 }
 
-size_t vector_search(vector_t *vector, const void *key, int (*compare)(const void *data, const void *key)) {
+size_t vector_search(vector_t *vector, const void *key, int (*compare)(const void *value, const void *key)) {
     if (vector == NULL || key == NULL || compare == NULL) {
         errno = EINVAL;
         return SIZE_MAX;
     }
 
     for (size_t i = 0; i < vector->size; i++) {
-        if (compare(vector->data[i], key) == 0) {
+        if (compare(vector->values[i], key) == 0) {
             return i;
         }
     }
@@ -374,13 +374,13 @@ size_t vector_capacity(vector_t *vector) {
     return vector->capacity;
 }
 
-double vector_increment(vector_t *vector) {
+double vector_growth(vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
         return 0;
     }
 
-    return vector->increment;
+    return vector->growth;
 }
 
 
@@ -403,23 +403,23 @@ bool vector_full(vector_t *vector) {
 }
 
 
-static bool _data_clone(vector_t *vector, const void *data, void *destination) {
-    if (vector == NULL || data == NULL || destination == NULL) {
+static bool _value_copy(vector_t *vector, const void *value, void *destination) {
+    if (vector == NULL || value == NULL || destination == NULL) {
         errno = EINVAL;
         return false;
     }
 
-    if (vector->clone != NULL) {
-        // errno set in clone()
-        return vector->clone(data, destination);
+    if (vector->copy != NULL) {
+        // errno set in copy()
+        return vector->copy(value, destination);
     }
 
-    memcpy(destination, data, vector->width);
+    memcpy(destination, value, vector->width);
     return true;
 }
 
-static void *_data_construct(vector_t *vector, const void *data) {
-    if (vector == NULL || data == NULL) {
+static void *_value_construct(vector_t *vector, const void *value) {
+    if (vector == NULL || value == NULL) {
         errno = EINVAL;
         return NULL;
     }
@@ -430,27 +430,27 @@ static void *_data_construct(vector_t *vector, const void *data) {
         return NULL;
     }
 
-    if (_data_clone(vector, data, new) == false) {
+    if (_value_copy(vector, value, new) == false) {
         free(new);
-        // errno set in _data_clone()
+        // errno set in _value_copy()
         return NULL;
     }
 
     return new;
 }
 
-static void _data_free(vector_t *vector, void *data) {
+static void _value_free(vector_t *vector, void *value) {
     if (vector == NULL) {
         errno = EINVAL;
         return;
     }
 
-    if (data != NULL) {
-        if (vector->delete != NULL) {
-            vector->delete(data);
+    if (value != NULL) {
+        if (vector->free_ != NULL) {
+            vector->free_(value);
         }
 
-        free(data);
+        free(value);
     }
 }
 

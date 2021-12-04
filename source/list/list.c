@@ -8,7 +8,7 @@
 
 
 typedef struct _Node {
-    void *data;
+    void *value;
     struct _Node *next;
     struct _Node *previous;
 }
@@ -20,16 +20,16 @@ struct _List {
     size_t size;
     size_t width;
     size_t limit;
-    void (*delete)(void *data);
-    bool (*clone)(const void *source, void *destination);
+    void (*free_)(void *value);
+    bool (*copy)(const void *source, void *destination);
 };
 
 
-static bool _data_clone(list_t *list, const void *data, void *destination);
-static void *_data_construct(list_t *list, const void *data);
-static void _data_free(list_t *list, void *data);
+static bool _value_copy(list_t *list, const void *value, void *destination);
+static void *_value_construct(list_t *list, const void *value);
+static void _value_free(list_t *list, void *value);
 
-static _node_t *_node_construct(list_t *list, const void *data);
+static _node_t *_node_construct(list_t *list, const void *value);
 static _node_t *_node_search(list_t *list, size_t index);
 static bool _node_remove(list_t *list, _node_t *node);
 static void _node_free(list_t *list, _node_t *node);
@@ -38,7 +38,7 @@ static void _node_free(list_t *list, _node_t *node);
 static _node_t *_list_mergesort(_node_t *front, bool reverse, int (*compare)(const void *first, const void *second));
 
 
-list_t *list_construct(size_t width, size_t limit, bool (*clone)(const void *source, void *destination), void (*delete)(void *data)) {
+list_t *list_construct(size_t width, size_t limit, bool (*copy)(const void *source, void *destination), void (*free_)(void *value)) {
     if (width == 0 || limit == 0) {
         errno = EINVAL;
         return NULL;
@@ -56,33 +56,33 @@ list_t *list_construct(size_t width, size_t limit, bool (*clone)(const void *sou
 
     list->width = width;
     list->limit = limit;
-    list->clone = clone;
-    list->delete = delete;
+    list->copy = copy;
+    list->free_ = free_;
 
     return list;
 }
 
-list_t *list_clone(list_t *list) {
+list_t *list_copy(list_t *list) {
     if (list == NULL) {
         errno = EINVAL;
         return NULL;
     }
 
-    list_t *clone = list_construct(list->width, list->limit, list->clone, list->delete);
-    if (clone == NULL) {
+    list_t *copy = list_construct(list->width, list->limit, list->copy, list->free_);
+    if (copy == NULL) {
         // errno set in list_construct()
         return NULL;
     }
 
     for (_node_t *node = list->front; node != NULL; node = node->next) {
-        if (list_insert(clone, clone->size, node->data) == false) {
-            list_free(clone);
+        if (list_insert(copy, copy->size, node->value) == false) {
+            list_free(copy);
             // errno set in list_insert()
             return NULL;
         }
     }
 
-    return clone;
+    return copy;
 }
 
 list_t *list_reverse(list_t *list) {
@@ -91,14 +91,14 @@ list_t *list_reverse(list_t *list) {
         return NULL;
     }
 
-    list_t *reversed = list_construct(list->width, list->limit, list->clone, list->delete);
+    list_t *reversed = list_construct(list->width, list->limit, list->copy, list->free_);
     if (reversed == NULL) {
         // errno set in list_construct()
         return NULL;
     }
 
     for (_node_t *node = list->front; node != NULL; node = node->next) {
-        if (list_insert(reversed, 0, node->data) == false) {
+        if (list_insert(reversed, 0, node->value) == false) {
             list_free(reversed);
             // errno set in list_insert()
             return NULL;
@@ -139,8 +139,8 @@ bool list_clear(list_t *list) {
 }
 
 
-bool list_insert(list_t *list, size_t index, const void *data) {
-    if (list == NULL || index > list->size || data == NULL) {
+bool list_insert(list_t *list, size_t index, const void *value) {
+    if (list == NULL || index > list->size || value == NULL) {
         errno = EINVAL;
         return false;
     }
@@ -150,7 +150,7 @@ bool list_insert(list_t *list, size_t index, const void *data) {
         return false;
     }
 
-    _node_t *new = _node_construct(list, data);
+    _node_t *new = _node_construct(list, value);
     if (new == NULL) {
         // errno set in _node_construct()
         return false;
@@ -195,8 +195,8 @@ bool list_remove(list_t *list, size_t index, void *destination) {
 
     _node_t *remove = _node_search(list, index);
 
-    if (destination != NULL && _data_clone(list, remove->data, destination) == false) {
-        // errno set in _data_clone()
+    if (destination != NULL && _value_copy(list, remove->value, destination) == false) {
+        // errno set in _value_copy()
         return false;
     }
 
@@ -204,7 +204,7 @@ bool list_remove(list_t *list, size_t index, void *destination) {
     return _node_remove(list, remove);
 }
 
-bool list_removeall(list_t *list, const void *remove, int (*compare)(const void *data, const void *remove)) {
+bool list_removeall(list_t *list, const void *remove, int (*compare)(const void *value, const void *remove)) {
     if (list == NULL || remove == NULL || compare == NULL) {
         errno = EINVAL;
         return false;
@@ -216,7 +216,7 @@ bool list_removeall(list_t *list, const void *remove, int (*compare)(const void 
         _node_t *temporary = node;
         node = node->next;
 
-        if (compare(temporary->data, remove) == 0) {
+        if (compare(temporary->value, remove) == 0) {
             if (_node_remove(list, temporary) == false) {
                 // errno set in _node_remove()
                 return false;
@@ -236,25 +236,25 @@ bool list_get(list_t *list, size_t index, void *destination) {
 
     _node_t *node = _node_search(list, index);
 
-    // errno set in _data_clone()
-    return _data_clone(list, node->data, destination);
+    // errno set in _value_copy()
+    return _value_copy(list, node->value, destination);
 }
 
-bool list_set(list_t *list, size_t index, const void *data) {
-    if (list == NULL || index >= list->size || data == NULL) {
+bool list_set(list_t *list, size_t index, const void *value) {
+    if (list == NULL || index >= list->size || value == NULL) {
         errno = EINVAL;
         return false;
     }
 
-    void *new = _data_construct(list, data);
+    void *new = _value_construct(list, value);
     if (new == NULL) {
-        // errno set in _data_construct()
+        // errno set in _value_construct()
         return false;
     }
 
     _node_t *node = _node_search(list, index);
-    _data_free(list, node->data);
-    node->data = new;
+    _value_free(list, node->value);
+    node->value = new;
 
     return true;
 }
@@ -275,12 +275,12 @@ bool list_sort(list_t *list, bool reverse, int (*compare)(const void *first, con
 }
 
 
-bool list_contains(list_t *list, const void *key, int (*compare)(const void *data, const void *key)) {
+bool list_contains(list_t *list, const void *key, int (*compare)(const void *value, const void *key)) {
     // errno set in list_search()
     return list_search(list, key, compare) != SIZE_MAX;
 }
 
-size_t list_search(list_t *list, const void *key, int (*compare)(const void *data, const void *key)) {
+size_t list_search(list_t *list, const void *key, int (*compare)(const void *value, const void *key)) {
     if (list == NULL || key == NULL || compare == NULL) {
         errno = EINVAL;
         return SIZE_MAX;
@@ -289,7 +289,7 @@ size_t list_search(list_t *list, const void *key, int (*compare)(const void *dat
     size_t i = 0;
 
     for (_node_t *node = list->front; node != NULL; node = node->next, i++) {
-        if (compare(node->data, key) == 0) {
+        if (compare(node->value, key) == 0) {
             return i;
         }
     }
@@ -345,23 +345,23 @@ bool list_full(list_t *list) {
 }
 
 
-static bool _data_clone(list_t *list, const void *data, void *destination) {
-    if (list == NULL || data == NULL || destination == NULL) {
+static bool _value_copy(list_t *list, const void *value, void *destination) {
+    if (list == NULL || value == NULL || destination == NULL) {
         errno = EINVAL;
         return false;
     }
 
-    if (list->clone != NULL) {
-        // errno set in clone()
-        return list->clone(data, destination);
+    if (list->copy != NULL) {
+        // errno set in copy()
+        return list->copy(value, destination);
     }
 
-    memcpy(destination, data, list->width);
+    memcpy(destination, value, list->width);
     return true;
 }
 
-static void *_data_construct(list_t *list, const void *data) {
-    if (list == NULL || data == NULL) {
+static void *_value_construct(list_t *list, const void *value) {
+    if (list == NULL || value == NULL) {
         errno = EINVAL;
         return NULL;
     }
@@ -372,33 +372,33 @@ static void *_data_construct(list_t *list, const void *data) {
         return NULL;
     }
 
-    if (_data_clone(list, data, new) == false) {
+    if (_value_copy(list, value, new) == false) {
         free(new);
-        // errno set in _data_clone()
+        // errno set in _value_copy()
         return NULL;
     }
 
     return new;
 }
 
-static void _data_free(list_t *list, void *data) {
+static void _value_free(list_t *list, void *value) {
     if (list == NULL) {
         errno = EINVAL;
         return;
     }
 
-    if (data != NULL) {
-        if (list->delete != NULL) {
-            list->delete(data);
+    if (value != NULL) {
+        if (list->free_ != NULL) {
+            list->free_(value);
         }
 
-        free(data);
+        free(value);
     }
 }
 
 
-static _node_t *_node_construct(list_t *list, const void *data) {
-    if (list == NULL || data == NULL) {
+static _node_t *_node_construct(list_t *list, const void *value) {
+    if (list == NULL || value == NULL) {
         errno = EINVAL;
         return NULL;
     }
@@ -409,10 +409,10 @@ static _node_t *_node_construct(list_t *list, const void *data) {
         return NULL;
     }
 
-    new->data = _data_construct(list, data);
-    if (new->data == NULL) {
+    new->value = _value_construct(list, value);
+    if (new->value == NULL) {
         free(new);
-        // errno set in _data_construct()
+        // errno set in _value_construct()
         return NULL;
     }
 
@@ -484,7 +484,7 @@ static void _node_free(list_t *list, _node_t *node) {
     }
 
     if (node != NULL) {
-        _data_free(list, node->data);
+        _value_free(list, node->value);
         free(node);
     }
 }
@@ -516,7 +516,7 @@ static _node_t *_list_merge(_node_t *first, _node_t *second, bool reverse, int (
 
     _node_t *smaller;
 
-    if ((reverse ? -1 : 1) * compare(first->data, second->data) < 0) {
+    if ((reverse ? -1 : 1) * compare(first->value, second->value) < 0) {
         first->next = _list_merge(first->next, second, reverse, compare);
         first->next->previous = first;
         first->previous = NULL;
