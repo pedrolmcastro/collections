@@ -111,8 +111,11 @@ stack_t *stack_reverse(stack_t *stack) {
 
 void stack_free(stack_t *stack) {
     if (stack != NULL) {
-        stack_clear(stack);
-        stack_trim(stack);
+        if (stack->values != NULL) {
+            stack_clear(stack);
+            stack_trim(stack);
+        }
+
         free(stack);
     }
 }

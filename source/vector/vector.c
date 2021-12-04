@@ -117,8 +117,11 @@ vector_t *vector_reverse(vector_t *vector) {
 
 void vector_free(vector_t *vector) {
     if (vector != NULL) {
-        vector_clear(vector);
-        vector_trim(vector);
+        if (vector->values != NULL) {
+            vector_clear(vector);
+            vector_trim(vector);
+        }
+        
         free(vector);
     }
 }
