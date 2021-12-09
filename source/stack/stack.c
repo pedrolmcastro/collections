@@ -1,3 +1,12 @@
+/**
+ * @author Pedro Lucas de Moliner de Castro
+ * @copyright MIT License
+ * @file stack.c
+ * 
+ * @brief Generic stack implementation using vector
+ */
+
+
 #include "stack.h"
 
 #include <errno.h>
@@ -22,10 +31,35 @@ struct _Stack {
 const size_t STACK_LIMIT = SIZE_MAX / (2 * sizeof(void *)) - 1;
 
 
-static bool _value_copy(stack_t *stack, const void *value, void *destination);
-static void *_value_construct(stack_t *stack, const void *value);
-static void _value_free(stack_t *stack, void *value);
+// Auxiliary functions for values
+static void *_value_construct(const stack_t *stack, const void *value);
+static bool _value_copy(const stack_t *stack, const void *value, void *destination);
+static void _value_free(const stack_t *stack, void *value);
 
+
+size_t stack_capacity(const stack_t *stack) {
+    if (stack == NULL) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    return stack->capacity;
+}
+
+bool stack_clear(stack_t *stack) {
+    if (stack == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    for (size_t i = 0; i < stack->size; i++) {
+        _value_free(stack, stack->values[i]);
+    }
+
+    stack->size = 0;
+
+    return true;
+}
 
 stack_t *stack_construct(size_t width, size_t limit, size_t capacity, double growth, bool (*copy)(const void *source, void *destination), void (*free_)(void *value)) {
     if (width == 0 || limit == 0 || limit > STACK_LIMIT || capacity > limit || growth < 2) {
@@ -63,7 +97,22 @@ stack_t *stack_construct(size_t width, size_t limit, size_t capacity, double gro
     return stack;
 }
 
-stack_t *stack_copy(stack_t *stack) {
+bool stack_contains(const stack_t *stack, const void *key, int (*compare)(const void *value, const void *key)) {
+    if (stack == NULL || key == NULL || compare == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    for (size_t i = 0; i < stack->size; i++) {
+        if (compare(stack->values[i], key) == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+stack_t *stack_copy(const stack_t *stack) {
     if (stack == NULL) {
         errno = EINVAL;
         return NULL;
@@ -86,27 +135,13 @@ stack_t *stack_copy(stack_t *stack) {
     return copy;
 }
 
-stack_t *stack_reverse(stack_t *stack) {
+bool stack_empty(const stack_t *stack) {
     if (stack == NULL) {
         errno = EINVAL;
-        return NULL;
+        return false;
     }
 
-    stack_t *reversed = stack_construct(stack->width, stack->limit, stack->capacity, stack->growth, stack->copy, stack->free_);
-    if (reversed == NULL) {
-        // errno set in stack_construct()
-        return NULL;
-    }
-
-    for (size_t i = stack->size; i > 0; i--) {
-        if (stack_push(reversed, stack->values[i - 1]) == false) {
-            stack_free(reversed);
-            // errno set in stack_push()
-            return NULL;
-        }
-    }
-
-    return reversed;
+    return stack->size == 0;
 }
 
 void stack_free(stack_t *stack) {
@@ -120,21 +155,85 @@ void stack_free(stack_t *stack) {
     }
 }
 
-bool stack_clear(stack_t *stack) {
+bool stack_full(const stack_t *stack) {
     if (stack == NULL) {
         errno = EINVAL;
         return false;
     }
 
-    for (size_t i = 0; i < stack->size; i++) {
-        _value_free(stack, stack->values[i]);
+    return stack->size == stack->limit;
+}
+
+double stack_growth(const stack_t *stack) {
+    if (stack == NULL) {
+        errno = EINVAL;
+        return 0;
     }
 
-    stack->size = 0;
+    return stack->growth;
+}
+
+size_t stack_limit(const stack_t *stack) {
+    if (stack == NULL) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    return stack->limit;
+}
+
+bool stack_peek(stack_t *stack, void *destination) {
+    if (stack == NULL || destination == NULL || stack_empty(stack)) {
+        errno = EINVAL;
+        return false;
+    }
+
+    // errno set in _value_copy()
+    return _value_copy(stack, stack->values[stack->size - 1], destination);
+}
+
+bool stack_pop(stack_t *stack, void *destination) {
+    if (stack == NULL || stack_empty(stack)) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (destination != NULL && stack_peek(stack, destination) == false) {
+        // errno set in stack_peek()
+        return false;
+    }
+
+    _value_free(stack, stack->values[--stack->size]);
 
     return true;
 }
 
+bool stack_push(stack_t *stack, const void *value) {
+    if (stack == NULL || value == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (stack_full(stack)) {
+        errno = ENOSPC;
+        return false;
+    }
+
+    if (stack_reserve(stack, stack->size + 1) == false) {
+        // errno set in stack_reserve()
+        return false;
+    }
+
+    void *new = _value_construct(stack, value);
+    if (new == NULL) {
+        // errno set in _value_construct()
+        return false;
+    }
+
+    stack->values[stack->size++] = new;
+
+    return true;
+}
 
 bool stack_reserve(stack_t *stack, size_t size) {
     if (stack == NULL || size > stack->limit) {
@@ -172,6 +271,38 @@ bool stack_reserve(stack_t *stack, size_t size) {
     return true;
 }
 
+stack_t *stack_reverse(const stack_t *stack) {
+    if (stack == NULL) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    stack_t *reversed = stack_construct(stack->width, stack->limit, stack->capacity, stack->growth, stack->copy, stack->free_);
+    if (reversed == NULL) {
+        // errno set in stack_construct()
+        return NULL;
+    }
+
+    for (size_t i = stack->size; i > 0; i--) {
+        if (stack_push(reversed, stack->values[i - 1]) == false) {
+            stack_free(reversed);
+            // errno set in stack_push()
+            return NULL;
+        }
+    }
+
+    return reversed;
+}
+
+size_t stack_size(const stack_t *stack) {
+    if (stack == NULL) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    return stack->size;
+}
+
 bool stack_trim(stack_t *stack) {
     if (stack == NULL) {
         errno = EINVAL;
@@ -197,87 +328,7 @@ bool stack_trim(stack_t *stack) {
     return true;
 }
 
-
-bool stack_push(stack_t *stack, const void *value) {
-    if (stack == NULL || value == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    if (stack_full(stack)) {
-        errno = ENOSPC;
-        return false;
-    }
-
-    if (stack_reserve(stack, stack->size + 1) == false) {
-        // errno set in stack_reserve()
-        return false;
-    }
-
-    void *new = _value_construct(stack, value);
-    if (new == NULL) {
-        // errno set in _value_construct()
-        return false;
-    }
-
-    stack->values[stack->size++] = new;
-
-    return true;
-}
-
-bool stack_pop(stack_t *stack, void *destination) {
-    if (stack == NULL || stack_empty(stack)) {
-        errno = EINVAL;
-        return false;
-    }
-
-    if (destination != NULL && stack_peek(stack, destination) == false) {
-        // errno set in stack_peek()
-        return false;
-    }
-
-    _value_free(stack, stack->values[--stack->size]);
-
-    return true;
-}
-
-bool stack_peek(stack_t *stack, void *destination) {
-    if (stack == NULL || destination == NULL || stack_empty(stack)) {
-        errno = EINVAL;
-        return false;
-    }
-
-    // errno set in _value_copy()
-    return _value_copy(stack, stack->values[stack->size - 1], destination);
-}
-
-
-bool stack_contains(stack_t *stack, const void *key, int (*compare)(const void *value, const void *key)) {
-    if (stack == NULL || key == NULL || compare == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    for (size_t i = 0; i < stack->size; i++) {
-        if (compare(stack->values[i], key) == 0) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-
-size_t stack_size(stack_t *stack) {
-    if (stack == NULL) {
-        errno = EINVAL;
-        return 0;
-    }
-
-    return stack->size;
-}
-
-size_t stack_width(stack_t *stack) {
+size_t stack_width(const stack_t *stack) {
     if (stack == NULL) {
         errno = EINVAL;
         return 0;
@@ -286,69 +337,8 @@ size_t stack_width(stack_t *stack) {
     return stack->width;
 }
 
-size_t stack_limit(stack_t *stack) {
-    if (stack == NULL) {
-        errno = EINVAL;
-        return 0;
-    }
 
-    return stack->limit;
-}
-
-size_t stack_capacity(stack_t *stack) {
-    if (stack == NULL) {
-        errno = EINVAL;
-        return 0;
-    }
-
-    return stack->capacity;
-}
-
-double stack_growth(stack_t *stack) {
-    if (stack == NULL) {
-        errno = EINVAL;
-        return 0;
-    }
-
-    return stack->growth;
-}
-
-
-bool stack_empty(stack_t *stack) {
-    if (stack == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    return stack->size == 0;
-}
-
-bool stack_full(stack_t *stack) {
-    if (stack == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    return stack->size == stack->limit;
-}
-
-
-static bool _value_copy(stack_t *stack, const void *value, void *destination) {
-    if (stack == NULL || value == NULL || destination == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    if (stack->copy != NULL) {
-        // errno set in copy()
-        return stack->copy(value, destination);
-    }
-
-    memcpy(destination, value, stack->width);
-    return true;
-}
-
-static void *_value_construct(stack_t *stack, const void *value) {
+static void *_value_construct(const stack_t *stack, const void *value) {
     if (stack == NULL || value == NULL) {
         errno = EINVAL;
         return NULL;
@@ -369,7 +359,22 @@ static void *_value_construct(stack_t *stack, const void *value) {
     return new;
 }
 
-static void _value_free(stack_t *stack, void *value) {
+static bool _value_copy(const stack_t *stack, const void *value, void *destination) {
+    if (stack == NULL || value == NULL || destination == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (stack->copy != NULL) {
+        // errno set in copy()
+        return stack->copy(value, destination);
+    }
+
+    memcpy(destination, value, stack->width);
+    return true;
+}
+
+static void _value_free(const stack_t *stack, void *value) {
     if (stack == NULL) {
         errno = EINVAL;
         return;
