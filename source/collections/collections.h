@@ -6,5 +6,6 @@
 #include "queue.h"
 #include "stack.h"
 #include "vector.h"
+#include "bitarray.h"
 
 #endif // COLLECTIONS_H
