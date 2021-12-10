@@ -182,7 +182,7 @@ size_t stack_limit(const stack_t *stack) {
     return stack->limit;
 }
 
-bool stack_peek(stack_t *stack, void *destination) {
+bool stack_peek(const stack_t *stack, void *destination) {
     if (stack == NULL || destination == NULL || stack_empty(stack)) {
         errno = EINVAL;
         return false;

@@ -124,7 +124,7 @@ size_t stack_limit(const stack_t *stack);
  * @param[out] destination Destination address
  * @return If the operation succeeded
  */
-bool stack_peek(stack_t *stack, void *destination);
+bool stack_peek(const stack_t *stack, void *destination);
 
 /**
  * @brief Removes the top value of the stack
