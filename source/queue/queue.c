@@ -1,3 +1,12 @@
+/**
+ * @author Pedro Lucas de Moliner de Castro
+ * @copyright MIT License
+ * @file queue.c
+ * 
+ * @brief Generic queue implementation using singly linked list
+ */
+
+
 #include "queue.h"
 
 #include <errno.h>
@@ -23,10 +32,35 @@ struct _Queue {
 };
 
 
-static bool _value_copy(queue_t *queue, const void *value, void *destination);
-static _node_t *_node_construct(queue_t *queue, const void *value);
-static void _node_free(queue_t *queue, _node_t *node);
+// Auxiliary functions for values
+static bool _value_copy(const queue_t *queue, const void *value, void *destination);
 
+// Auxiliary functions for nodes
+static _node_t *_node_construct(const queue_t *queue, const void *value);
+static void _node_free(const queue_t *queue, _node_t *node);
+
+
+bool queue_clear(queue_t *queue) {
+    if (queue == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    _node_t *node = queue->front;
+    
+    while (node != NULL) {
+        _node_t *remove = node;
+        node = node->next;
+
+        _node_free(queue, remove);
+    }
+
+    queue->front = NULL;
+    queue->back = NULL;
+    queue->size = 0;
+
+    return true;
+}
 
 queue_t *queue_construct(size_t width, size_t limit, bool (*copy)(const void *source, void *destination), void (*free_)(void *value)) {
     if (width == 0 || limit == 0) {
@@ -52,7 +86,22 @@ queue_t *queue_construct(size_t width, size_t limit, bool (*copy)(const void *so
     return queue;
 }
 
-queue_t *queue_copy(queue_t *queue) {
+bool queue_contains(const queue_t *queue, const void *key, int (*compare)(const void *value, const void *key)) {
+    if (queue == NULL || key == NULL || compare == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    for (_node_t *node = queue->front; node != NULL; node = node->next) {
+        if (compare(node->value, key) == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+queue_t *queue_copy(const queue_t *queue) {
     if (queue == NULL) {
         errno = EINVAL;
         return NULL;
@@ -75,7 +124,106 @@ queue_t *queue_copy(queue_t *queue) {
     return copy;
 }
 
-queue_t *queue_reverse(queue_t *queue) {
+bool queue_dequeue(queue_t *queue, void *destination) {
+    if (queue == NULL || queue_empty(queue)) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (destination != NULL && queue_peek(queue, destination) == false) {
+        // errno set in queue_peek()
+        return false;
+    }
+
+    _node_t *remove = queue->front;
+    queue->front = queue->front->next;
+
+    if (queue->front == NULL) {
+        queue->back = NULL;
+    }
+
+    _node_free(queue, remove);
+    queue->size--;
+
+    return true;
+}
+
+bool queue_empty(const queue_t *queue) {
+    if (queue == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    return queue->front == NULL;
+}
+
+bool queue_enqueue(queue_t *queue, const void *value) {
+    if (queue == NULL || value == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (queue_full(queue)) {
+        errno = ENOSPC;
+        return false;
+    }
+
+    _node_t *new = _node_construct(queue, value);
+    if (new == NULL) {
+        // errno set in _node_construct()
+        return false;
+    }
+
+    if (queue_empty(queue)) {
+        queue->front = new;
+        queue->back = new;
+    }
+    else {
+        queue->back->next = new;
+        queue->back = new;
+    }
+
+    queue->size++;
+
+    return true;
+}
+
+void queue_free(queue_t *queue) {
+    if (queue != NULL) {
+        queue_clear(queue);
+        free(queue);
+    }
+}
+
+bool queue_full(const queue_t *queue) {
+    if (queue == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    return queue->size == queue->limit;
+}
+
+size_t queue_limit(const queue_t *queue) {
+    if (queue == NULL) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    return queue->limit;
+}
+
+bool queue_peek(const queue_t *queue, void *destination) {
+    if (queue == NULL || destination == NULL || queue_empty(queue)) {
+        errno = EINVAL;
+        return false;
+    }
+
+    // errno set in _value_copy()
+    return _value_copy(queue, queue->front->value, destination);
+}
+
+queue_t *queue_reverse(const queue_t *queue) {
     if (queue == NULL) {
         errno = EINVAL;
         return NULL;
@@ -110,120 +258,7 @@ queue_t *queue_reverse(queue_t *queue) {
     return reversed;
 }
 
-
-void queue_free(queue_t *queue) {
-    if (queue != NULL) {
-        queue_clear(queue);
-        free(queue);
-    }
-}
-
-bool queue_clear(queue_t *queue) {
-    if (queue == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    _node_t *node = queue->front;
-    
-    while (node != NULL) {
-        _node_t *remove = node;
-        node = node->next;
-
-        _node_free(queue, remove);
-    }
-
-    queue->front = NULL;
-    queue->back = NULL;
-    queue->size = 0;
-
-    return true;
-}
-
-
-bool queue_enqueue(queue_t *queue, const void *value) {
-    if (queue == NULL || value == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    if (queue_full(queue)) {
-        errno = ENOSPC;
-        return false;
-    }
-
-    _node_t *new = _node_construct(queue, value);
-    if (new == NULL) {
-        // errno set in _node_construct()
-        return false;
-    }
-
-    if (queue_empty(queue)) {
-        queue->front = new;
-        queue->back = new;
-    }
-    else {
-        queue->back->next = new;
-        queue->back = new;
-    }
-
-    queue->size++;
-
-    return true;
-}
-
-bool queue_dequeue(queue_t *queue, void *destination) {
-    if (queue == NULL || queue_empty(queue)) {
-        errno = EINVAL;
-        return false;
-    }
-
-    if (destination != NULL && queue_peek(queue, destination) == false) {
-        // errno set in queue_peek()
-        return false;
-    }
-
-    _node_t *remove = queue->front;
-    queue->front = queue->front->next;
-
-    if (queue->front == NULL) {
-        queue->back = NULL;
-    }
-
-    _node_free(queue, remove);
-    queue->size--;
-
-    return true;
-}
-
-bool queue_peek(queue_t *queue, void *destination) {
-    if (queue == NULL || destination == NULL || queue_empty(queue)) {
-        errno = EINVAL;
-        return false;
-    }
-
-    // errno set in _value_copy()
-    return _value_copy(queue, queue->front->value, destination);
-}
-
-
-bool queue_contains(queue_t *queue, const void *key, int (*compare)(const void *value, const void *key)) {
-    if (queue == NULL || key == NULL || compare == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    for (_node_t *node = queue->front; node != NULL; node = node->next) {
-        if (compare(node->value, key) == 0) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-
-size_t queue_size(queue_t *queue) {
+size_t queue_size(const queue_t *queue) {
     if (queue == NULL) {
         errno = EINVAL;
         return 0;
@@ -232,7 +267,7 @@ size_t queue_size(queue_t *queue) {
     return queue->size;
 }
 
-size_t queue_width(queue_t *queue) {
+size_t queue_width(const queue_t *queue) {
     if (queue == NULL) {
         errno = EINVAL;
         return 0;
@@ -241,36 +276,8 @@ size_t queue_width(queue_t *queue) {
     return queue->width;
 }
 
-size_t queue_limit(queue_t *queue) {
-    if (queue == NULL) {
-        errno = EINVAL;
-        return 0;
-    }
 
-    return queue->limit;
-}
-
-
-bool queue_empty(queue_t *queue) {
-    if (queue == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    return queue->front == NULL;
-}
-
-bool queue_full(queue_t *queue) {
-    if (queue == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    return queue->size == queue->limit;
-}
-
-
-static bool _value_copy(queue_t *queue, const void *value, void *destination) {
+static bool _value_copy(const queue_t *queue, const void *value, void *destination) {
     if (queue == NULL || value == NULL || destination == NULL) {
         errno = EINVAL;
         return false;
@@ -285,7 +292,8 @@ static bool _value_copy(queue_t *queue, const void *value, void *destination) {
     return true;
 }
 
-static _node_t *_node_construct(queue_t *queue, const void *value) {
+
+static _node_t *_node_construct(const queue_t *queue, const void *value) {
     if (queue == NULL || value == NULL) {
         errno = EINVAL;
         return NULL;
@@ -316,7 +324,7 @@ static _node_t *_node_construct(queue_t *queue, const void *value) {
     return new;
 }
 
-static void _node_free(queue_t *queue, _node_t *node) {
+static void _node_free(const queue_t *queue, _node_t *node) {
     if (queue == NULL) {
         errno = EINVAL;
         return;
