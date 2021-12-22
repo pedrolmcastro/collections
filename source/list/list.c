@@ -1,3 +1,12 @@
+/**
+ * @author Pedro Lucas de Moliner de Castro
+ * @copyright MIT License
+ * @file list.c
+ * 
+ * @brief Generic doubly linked list implementation
+ */
+
+
 #include "list.h"
 
 #include <errno.h>
@@ -25,18 +34,42 @@ struct _List {
 };
 
 
-static bool _value_copy(list_t *list, const void *value, void *destination);
-static void *_value_construct(list_t *list, const void *value);
-static void _value_free(list_t *list, void *value);
+// Auxiliary functions for values
+static void *_value_construct(const list_t *list, const void *value);
+static bool _value_copy(const list_t *list, const void *value, void *destination);
+static void _value_free(const list_t *list, void *value);
 
-static _node_t *_node_construct(list_t *list, const void *value);
-static _node_t *_node_search(list_t *list, size_t index);
+// Auxiliary functions for nodes
+static _node_t *_node_construct(const list_t *list, const void *value);
+static void _node_free(const list_t *list, _node_t *node);
 static bool _node_remove(list_t *list, _node_t *node);
-static void _node_free(list_t *list, _node_t *node);
+static _node_t *_node_search(const list_t *list, size_t index);
 
-// Auxiliary function for list_sort()
+// Auxiliary functions for lists
 static _node_t *_list_mergesort(_node_t *front, bool reverse, int (*compare)(const void *first, const void *second));
 
+
+bool list_clear(list_t *list) {
+    if (list == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    _node_t *node = list->front;
+    
+    while (node != NULL) {
+        _node_t *remove = node;
+        node = node->next;
+
+        _node_free(list, remove);
+    }
+
+    list->front = NULL;
+    list->back = NULL;
+    list->size = 0;
+
+    return true;
+}
 
 list_t *list_construct(size_t width, size_t limit, bool (*copy)(const void *source, void *destination), void (*free_)(void *value)) {
     if (width == 0 || limit == 0) {
@@ -62,7 +95,12 @@ list_t *list_construct(size_t width, size_t limit, bool (*copy)(const void *sour
     return list;
 }
 
-list_t *list_copy(list_t *list) {
+bool list_contains(const list_t *list, const void *key, int (*compare)(const void *value, const void *key)) {
+    // errno set in list_search()
+    return list_search(list, key, compare) != SIZE_MAX;
+}
+
+list_t *list_copy(const list_t *list) {
     if (list == NULL) {
         errno = EINVAL;
         return NULL;
@@ -85,29 +123,14 @@ list_t *list_copy(list_t *list) {
     return copy;
 }
 
-list_t *list_reverse(list_t *list) {
+bool list_empty(const list_t *list) {
     if (list == NULL) {
         errno = EINVAL;
-        return NULL;
+        return false;
     }
 
-    list_t *reversed = list_construct(list->width, list->limit, list->copy, list->free_);
-    if (reversed == NULL) {
-        // errno set in list_construct()
-        return NULL;
-    }
-
-    for (_node_t *node = list->front; node != NULL; node = node->next) {
-        if (list_insert(reversed, 0, node->value) == false) {
-            list_free(reversed);
-            // errno set in list_insert()
-            return NULL;
-        }
-    }
-
-    return reversed;
+    return list->front == NULL;
 }
-
 
 void list_free(list_t *list) {
     if (list != NULL) {
@@ -116,28 +139,26 @@ void list_free(list_t *list) {
     }
 }
 
-bool list_clear(list_t *list) {
+bool list_full(const list_t *list) {
     if (list == NULL) {
         errno = EINVAL;
         return false;
     }
 
-    _node_t *node = list->front;
-    
-    while (node != NULL) {
-        _node_t *remove = node;
-        node = node->next;
-
-        _node_free(list, remove);
-    }
-
-    list->front = NULL;
-    list->back = NULL;
-    list->size = 0;
-
-    return true;
+    return list->size == list->limit;
 }
 
+bool list_get(const list_t *list, size_t index, void *destination) {
+    if (list == NULL || index >= list->size || destination == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    _node_t *node = _node_search(list, index);
+
+    // errno set in _value_copy()
+    return _value_copy(list, node->value, destination);
+}
 
 bool list_insert(list_t *list, size_t index, const void *value) {
     if (list == NULL || index > list->size || value == NULL) {
@@ -187,6 +208,15 @@ bool list_insert(list_t *list, size_t index, const void *value) {
     return true;
 }
 
+size_t list_limit(const list_t *list) {
+    if (list == NULL) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    return list->limit;
+}
+
 bool list_remove(list_t *list, size_t index, void *destination) {
     if (list == NULL || index >= list->size) {
         errno = EINVAL;
@@ -217,27 +247,51 @@ bool list_removeall(list_t *list, const void *remove, int (*compare)(const void 
         node = node->next;
 
         if (compare(temporary->value, remove) == 0) {
-            if (_node_remove(list, temporary) == false) {
-                // errno set in _node_remove()
-                return false;
-            }
+            _node_remove(list, temporary);
         }
     }
 
     return true;
 }
 
-
-bool list_get(list_t *list, size_t index, void *destination) {
-    if (list == NULL || index >= list->size || destination == NULL) {
+list_t *list_reverse(const list_t *list) {
+    if (list == NULL) {
         errno = EINVAL;
-        return false;
+        return NULL;
     }
 
-    _node_t *node = _node_search(list, index);
+    list_t *reversed = list_construct(list->width, list->limit, list->copy, list->free_);
+    if (reversed == NULL) {
+        // errno set in list_construct()
+        return NULL;
+    }
 
-    // errno set in _value_copy()
-    return _value_copy(list, node->value, destination);
+    for (_node_t *node = list->front; node != NULL; node = node->next) {
+        if (list_insert(reversed, 0, node->value) == false) {
+            list_free(reversed);
+            // errno set in list_insert()
+            return NULL;
+        }
+    }
+
+    return reversed;
+}
+
+size_t list_search(const list_t *list, const void *key, int (*compare)(const void *value, const void *key)) {
+    if (list == NULL || key == NULL || compare == NULL) {
+        errno = EINVAL;
+        return SIZE_MAX;
+    }
+
+    size_t i = 0;
+
+    for (_node_t *node = list->front; node != NULL; node = node->next, i++) {
+        if (compare(node->value, key) == 0) {
+            return i;
+        }
+    }
+
+    return SIZE_MAX;
 }
 
 bool list_set(list_t *list, size_t index, const void *value) {
@@ -259,6 +313,15 @@ bool list_set(list_t *list, size_t index, const void *value) {
     return true;
 }
 
+size_t list_size(const list_t *list) {
+    if (list == NULL) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    return list->size;
+}
+
 bool list_sort(list_t *list, bool reverse, int (*compare)(const void *first, const void *second)) {
     if (list == NULL || compare == NULL) {
         errno = EINVAL;
@@ -274,40 +337,7 @@ bool list_sort(list_t *list, bool reverse, int (*compare)(const void *first, con
     return true;
 }
 
-
-bool list_contains(list_t *list, const void *key, int (*compare)(const void *value, const void *key)) {
-    // errno set in list_search()
-    return list_search(list, key, compare) != SIZE_MAX;
-}
-
-size_t list_search(list_t *list, const void *key, int (*compare)(const void *value, const void *key)) {
-    if (list == NULL || key == NULL || compare == NULL) {
-        errno = EINVAL;
-        return SIZE_MAX;
-    }
-
-    size_t i = 0;
-
-    for (_node_t *node = list->front; node != NULL; node = node->next, i++) {
-        if (compare(node->value, key) == 0) {
-            return i;
-        }
-    }
-
-    return SIZE_MAX;
-}
-
-
-size_t list_size(list_t *list) {
-    if (list == NULL) {
-        errno = EINVAL;
-        return 0;
-    }
-
-    return list->size;
-}
-
-size_t list_width(list_t *list) {
+size_t list_width(const list_t *list) {
     if (list == NULL) {
         errno = EINVAL;
         return 0;
@@ -316,51 +346,8 @@ size_t list_width(list_t *list) {
     return list->width;
 }
 
-size_t list_limit(list_t *list) {
-    if (list == NULL) {
-        errno = EINVAL;
-        return 0;
-    }
 
-    return list->limit;
-}
-
-
-bool list_empty(list_t *list) {
-    if (list == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    return list->front == NULL;
-}
-
-bool list_full(list_t *list) {
-    if (list == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    return list->size == list->limit;
-}
-
-
-static bool _value_copy(list_t *list, const void *value, void *destination) {
-    if (list == NULL || value == NULL || destination == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    if (list->copy != NULL) {
-        // errno set in copy()
-        return list->copy(value, destination);
-    }
-
-    memcpy(destination, value, list->width);
-    return true;
-}
-
-static void *_value_construct(list_t *list, const void *value) {
+static void *_value_construct(const list_t *list, const void *value) {
     if (list == NULL || value == NULL) {
         errno = EINVAL;
         return NULL;
@@ -381,7 +368,22 @@ static void *_value_construct(list_t *list, const void *value) {
     return new;
 }
 
-static void _value_free(list_t *list, void *value) {
+static bool _value_copy(const list_t *list, const void *value, void *destination) {
+    if (list == NULL || value == NULL || destination == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (list->copy != NULL) {
+        // errno set in copy()
+        return list->copy(value, destination);
+    }
+
+    memcpy(destination, value, list->width);
+    return true;
+}
+
+static void _value_free(const list_t *list, void *value) {
     if (list == NULL) {
         errno = EINVAL;
         return;
@@ -397,7 +399,7 @@ static void _value_free(list_t *list, void *value) {
 }
 
 
-static _node_t *_node_construct(list_t *list, const void *value) {
+static _node_t *_node_construct(const list_t *list, const void *value) {
     if (list == NULL || value == NULL) {
         errno = EINVAL;
         return NULL;
@@ -422,30 +424,16 @@ static _node_t *_node_construct(list_t *list, const void *value) {
     return new;
 }
 
-static _node_t *_node_search(list_t *list, size_t index) {
-    if (list == NULL || index >= list->size) {
+static void _node_free(const list_t *list, _node_t *node) {
+    if (list == NULL) {
         errno = EINVAL;
-        return NULL;
+        return;
     }
 
-    _node_t *node;
-
-    if (index < list->size / 2) {
-        node = list->front;
-
-        for (size_t i = 0; i < index; i++) {
-            node = node->next;
-        }
+    if (node != NULL) {
+        _value_free(list, node->value);
+        free(node);
     }
-    else {
-        node = list->back;
-
-        for (size_t i = 0; i < list->size - index - 1; i++) {
-            node = node->previous;
-        }
-    }
-
-    return node;
 }
 
 static bool _node_remove(list_t *list, _node_t *node) {
@@ -477,16 +465,30 @@ static bool _node_remove(list_t *list, _node_t *node) {
     return true;
 }
 
-static void _node_free(list_t *list, _node_t *node) {
-    if (list == NULL) {
+static _node_t *_node_search(const list_t *list, size_t index) {
+    if (list == NULL || index >= list->size) {
         errno = EINVAL;
-        return;
+        return NULL;
     }
 
-    if (node != NULL) {
-        _value_free(list, node->value);
-        free(node);
+    _node_t *node;
+
+    if (index < list->size / 2) {
+        node = list->front;
+
+        for (size_t i = 0; i < index; i++) {
+            node = node->next;
+        }
     }
+    else {
+        node = list->back;
+
+        for (size_t i = 0; i < list->size - index - 1; i++) {
+            node = node->previous;
+        }
+    }
+
+    return node;
 }
 
 
