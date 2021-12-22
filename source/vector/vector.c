@@ -1,3 +1,12 @@
+/**
+ * @author Pedro Lucas de Moliner de Castro
+ * @copyright MIT License
+ * @file vector.c
+ * 
+ * @brief Generic vector implementation
+ */
+
+
 #include "vector.h"
 
 #include <errno.h>
@@ -22,15 +31,40 @@ struct _Vector {
 const size_t VECTOR_LIMIT = SIZE_MAX / (2 * sizeof(void *)) - 1;
 
 
-static bool _value_copy(vector_t *vector, const void *value, void *destination);
+// Auxiliary functions for values
 static void *_value_construct(vector_t *vector, const void *value);
+static bool _value_copy(vector_t *vector, const void *value, void *destination);
 static void _value_free(vector_t *vector, void *value);
 
-// Auxiliary functions and variables for vector_sort()
+// Auxiliary functions and variables for sorting
 static int _qsort_compare(const void *first, const void *second);
 static int (*_compare)(const void *first, const void *second);
 static bool _reverse;
 
+
+size_t vector_capacity(vector_t *vector) {
+    if (vector == NULL) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    return vector->capacity;
+}
+
+bool vector_clear(vector_t *vector) {
+    if (vector == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    for (size_t i = 0; i < vector->size; i++) {
+        _value_free(vector, vector->values[i]);
+    }
+
+    vector->size = 0;
+
+    return true;
+}
 
 vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double growth, bool (*copy)(const void *source, void *destination), void (*free_)(void *value)) {
     if (width == 0 || limit == 0 || limit > VECTOR_LIMIT || capacity > limit || growth < 2) {
@@ -68,6 +102,11 @@ vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double g
     return vector;
 }
 
+bool vector_contains(vector_t *vector, const void *key, int (*compare)(const void *value, const void *key)) {
+    // errno set in vector_search()
+    return vector_search(vector, key, compare) != SIZE_MAX;
+}
+
 vector_t *vector_copy(vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
@@ -91,29 +130,14 @@ vector_t *vector_copy(vector_t *vector) {
     return copy;
 }
 
-vector_t *vector_reverse(vector_t *vector) {
+bool vector_empty(vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
-        return NULL;
+        return false;
     }
 
-    vector_t *reversed = vector_construct(vector->width, vector->limit, vector->capacity, vector->growth, vector->copy, vector->free_);
-    if (reversed == NULL) {
-        // errno set in vector_construct()
-        return NULL;
-    }
-
-    for (size_t i = vector->size; i > 0; i--) {
-        if (vector_insert(reversed, reversed->size, vector->values[i - 1]) == false) {
-            vector_free(reversed);
-            // errno set in vector_insert()
-            return NULL;
-        }
-    }
-
-    return reversed;
+    return vector->size == 0;
 }
-
 
 void vector_free(vector_t *vector) {
     if (vector != NULL) {
@@ -126,21 +150,110 @@ void vector_free(vector_t *vector) {
     }
 }
 
-bool vector_clear(vector_t *vector) {
+bool vector_full(vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
         return false;
     }
 
-    for (size_t i = 0; i < vector->size; i++) {
-        _value_free(vector, vector->values[i]);
+    return vector->size == vector->limit;
+}
+
+bool vector_get(vector_t *vector, size_t index, void *destination) {
+    if (vector == NULL || index >= vector->size || destination == NULL) {
+        errno = EINVAL;
+        return false;
     }
 
-    vector->size = 0;
+    // errno set in _value_copy()
+    return _value_copy(vector, vector->values[index], destination);
+}
+
+double vector_growth(vector_t *vector) {
+    if (vector == NULL) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    return vector->growth;
+}
+
+bool vector_insert(vector_t *vector, size_t index, const void *value) {
+    if (vector == NULL || index > vector->size || value == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (vector_full(vector)) {
+        errno = ENOSPC;
+        return false;
+    }
+
+    if (vector_reserve(vector, vector->size + 1) == false) {
+        // errno set in vector_reserve()
+        return false;
+    }
+
+    void *new = _value_construct(vector, value);
+    if (new == NULL) {
+        // errno set in _value_construct()
+        return false;
+    }
+
+    for (size_t i = vector->size; i > index; i--) {
+        vector->values[i] = vector->values[i - 1];
+    }
+
+    vector->values[index] = new;
+    vector->size++;
 
     return true;
 }
 
+size_t vector_limit(vector_t *vector) {
+    if (vector == NULL) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    return vector->limit;
+}
+
+bool vector_remove(vector_t *vector, size_t index, void *destination) {
+    if (vector == NULL || index >= vector->size) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (destination != NULL && vector_get(vector, index, destination) == false) {
+        // errno set in vector_get()
+        return false;
+    }
+
+    _value_free(vector, vector->values[index]);
+    vector->size--;
+
+    for (size_t i = index; i < vector->size; i++) {
+        vector->values[i] = vector->values[i + 1];
+    }
+
+    return true;
+}
+
+bool vector_removeall(vector_t *vector, const void *remove, int (*compare)(const void *value, const void *remove)) {
+    if (vector == NULL || remove == NULL || compare == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    for (size_t i = vector->size; i > 0; i--) {
+        if (compare(vector->values[i - 1], remove) == 0) {
+            vector_remove(vector, i - 1, NULL);
+        }
+    }
+
+    return true;
+}
 
 bool vector_reserve(vector_t *vector, size_t size) {
     if (vector == NULL || size > vector->limit) {
@@ -178,6 +291,85 @@ bool vector_reserve(vector_t *vector, size_t size) {
     return true;
 }
 
+vector_t *vector_reverse(vector_t *vector) {
+    if (vector == NULL) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    vector_t *reversed = vector_construct(vector->width, vector->limit, vector->capacity, vector->growth, vector->copy, vector->free_);
+    if (reversed == NULL) {
+        // errno set in vector_construct()
+        return NULL;
+    }
+
+    for (size_t i = vector->size; i > 0; i--) {
+        if (vector_insert(reversed, reversed->size, vector->values[i - 1]) == false) {
+            vector_free(reversed);
+            // errno set in vector_insert()
+            return NULL;
+        }
+    }
+
+    return reversed;
+}
+
+size_t vector_search(vector_t *vector, const void *key, int (*compare)(const void *value, const void *key)) {
+    if (vector == NULL || key == NULL || compare == NULL) {
+        errno = EINVAL;
+        return SIZE_MAX;
+    }
+
+    for (size_t i = 0; i < vector->size; i++) {
+        if (compare(vector->values[i], key) == 0) {
+            return i;
+        }
+    }
+
+    return SIZE_MAX;
+}
+
+bool vector_set(vector_t *vector, size_t index, const void *value) {
+    if (vector == NULL || index >= vector->size || value == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    void *new = _value_construct(vector, value);
+    if (new == NULL) {
+        // errno set in _value_construct()
+        return false;
+    }
+
+    _value_free(vector, vector->values[index]);
+    vector->values[index] = new;
+
+    return true;
+}
+
+size_t vector_size(vector_t *vector) {
+    if (vector == NULL) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    return vector->size;
+}
+
+bool vector_sort(vector_t *vector, bool reverse, int (*compare)(const void *first, const void *second)) {
+    if (vector == NULL || compare == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    _reverse = reverse;
+    _compare = compare;
+
+    qsort(vector->values, vector->size, sizeof(void *), _qsort_compare);
+
+    return true;
+}
+
 bool vector_trim(vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
@@ -203,153 +395,6 @@ bool vector_trim(vector_t *vector) {
     return true;
 }
 
-
-bool vector_insert(vector_t *vector, size_t index, const void *value) {
-    if (vector == NULL || value == NULL || index > vector->size) {
-        errno = EINVAL;
-        return false;
-    }
-
-    if (vector_full(vector)) {
-        errno = ENOSPC;
-        return false;
-    }
-
-    if (vector_reserve(vector, vector->size + 1) == false) {
-        // errno set in vector_reserve()
-        return false;
-    }
-
-    void *new = _value_construct(vector, value);
-    if (new == NULL) {
-        // errno set in _value_construct()
-        return false;
-    }
-
-    for (size_t i = vector->size; i > index; i--) {
-        vector->values[i] = vector->values[i - 1];
-    }
-
-    vector->values[index] = new;
-    vector->size++;
-
-    return true;
-}
-
-bool vector_remove(vector_t *vector, size_t index, void *destination) {
-    if (vector == NULL || index >= vector->size) {
-        errno = EINVAL;
-        return false;
-    }
-
-    if (destination != NULL && vector_get(vector, index, destination) == false) {
-        // errno set in vector_get()
-        return false;
-    }
-
-    _value_free(vector, vector->values[index]);
-    vector->size--;
-
-    for (size_t i = index; i < vector->size; i++) {
-        vector->values[i] = vector->values[i + 1];
-    }
-
-    return true;
-}
-
-bool vector_removeall(vector_t *vector, const void *remove, int (*compare)(const void *value, const void *remove)) {
-    if (vector == NULL || remove == NULL || compare == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    for (size_t i = vector->size; i > 0; i--) {
-        if (compare(vector->values[i - 1], remove) == 0) {
-            if (vector_remove(vector, i - 1, NULL) == false) {
-                // errno set in vector_remove()
-                return false;
-            }
-        }
-    }
-
-    return true;
-}
-
-
-bool vector_get(vector_t *vector, size_t index, void *destination) {
-    if (vector == NULL || destination == NULL || index >= vector->size) {
-        errno = EINVAL;
-        return false;
-    }
-
-    // errno set in _value_copy()
-    return _value_copy(vector, vector->values[index], destination);
-}
-
-bool vector_set(vector_t *vector, size_t index, const void *value) {
-    if (vector == NULL || value == NULL || index >= vector->size) {
-        errno = EINVAL;
-        return false;
-    }
-
-    void *new = _value_construct(vector, value);
-    if (new == NULL) {
-        // errno set in _value_construct()
-        return false;
-    }
-
-    _value_free(vector, vector->values[index]);
-    vector->values[index] = new;
-
-    return true;
-}
-
-
-bool vector_sort(vector_t *vector, bool reverse, int (*compare)(const void *first, const void *second)) {
-    if (vector == NULL || compare == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    _reverse = reverse;
-    _compare = compare;
-
-    qsort(vector->values, vector->size, sizeof(void *), _qsort_compare);
-
-    return true;
-}
-
-
-bool vector_contains(vector_t *vector, const void *key, int (*compare)(const void *value, const void *key)) {
-    // errno set in vector_search()
-    return vector_search(vector, key, compare) != SIZE_MAX;
-}
-
-size_t vector_search(vector_t *vector, const void *key, int (*compare)(const void *value, const void *key)) {
-    if (vector == NULL || key == NULL || compare == NULL) {
-        errno = EINVAL;
-        return SIZE_MAX;
-    }
-
-    for (size_t i = 0; i < vector->size; i++) {
-        if (compare(vector->values[i], key) == 0) {
-            return i;
-        }
-    }
-
-    return SIZE_MAX;
-}
-
-
-size_t vector_size(vector_t *vector) {
-    if (vector == NULL) {
-        errno = EINVAL;
-        return 0;
-    }
-
-    return vector->size;
-}
-
 size_t vector_width(vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
@@ -359,67 +404,6 @@ size_t vector_width(vector_t *vector) {
     return vector->width;
 }
 
-size_t vector_limit(vector_t *vector) {
-    if (vector == NULL) {
-        errno = EINVAL;
-        return 0;
-    }
-
-    return vector->limit;
-}
-
-size_t vector_capacity(vector_t *vector) {
-    if (vector == NULL) {
-        errno = EINVAL;
-        return 0;
-    }
-
-    return vector->capacity;
-}
-
-double vector_growth(vector_t *vector) {
-    if (vector == NULL) {
-        errno = EINVAL;
-        return 0;
-    }
-
-    return vector->growth;
-}
-
-
-bool vector_empty(vector_t *vector) {
-    if (vector == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    return vector->size == 0;
-}
-
-bool vector_full(vector_t *vector) {
-    if (vector == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    return vector->size == vector->limit;
-}
-
-
-static bool _value_copy(vector_t *vector, const void *value, void *destination) {
-    if (vector == NULL || value == NULL || destination == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    if (vector->copy != NULL) {
-        // errno set in copy()
-        return vector->copy(value, destination);
-    }
-
-    memcpy(destination, value, vector->width);
-    return true;
-}
 
 static void *_value_construct(vector_t *vector, const void *value) {
     if (vector == NULL || value == NULL) {
@@ -440,6 +424,21 @@ static void *_value_construct(vector_t *vector, const void *value) {
     }
 
     return new;
+}
+
+static bool _value_copy(vector_t *vector, const void *value, void *destination) {
+    if (vector == NULL || value == NULL || destination == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (vector->copy != NULL) {
+        // errno set in copy()
+        return vector->copy(value, destination);
+    }
+
+    memcpy(destination, value, vector->width);
+    return true;
 }
 
 static void _value_free(vector_t *vector, void *value) {
