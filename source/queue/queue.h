@@ -17,6 +17,7 @@
 
 typedef struct _Queue queue_t;
 
+
 /**
  * @brief Removes all values from queue
  * @throw EINVAL If queue is NULL

@@ -1,3 +1,12 @@
+/**
+ * @author Pedro Lucas de Moliner de Castro
+ * @copyright MIT License
+ * @file deque.c
+ * 
+ * @brief Generic deque implementation using doubly linked list
+ */
+
+
 #include "deque.h"
 
 #include <errno.h>
@@ -24,10 +33,45 @@ struct _Deque {
 };
 
 
-static bool _value_copy(deque_t *deque, const void *value, void *destination);
-static _node_t *_node_construct(deque_t *deque, const void *value);
-static void _node_free(deque_t *deque, _node_t *node);
+// Auxiliary functions for values
+static bool _value_copy(const deque_t *deque, const void *value, void *destination);
 
+// Auxiliary functions for nodes
+static _node_t *_node_construct(const deque_t *deque, const void *value);
+static void _node_free(const deque_t *deque, _node_t *node);
+
+
+bool deque_back(const deque_t *deque, void *destination) {
+    if (deque == NULL || destination == NULL || deque_empty(deque)) {
+        errno = EINVAL;
+        return false;
+    }
+
+    // errno set in _value_copy()
+    return _value_copy(deque, deque->back->value, destination);
+}
+
+bool deque_clear(deque_t *deque) {
+    if (deque == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    _node_t *node = deque->front;
+    
+    while (node != NULL) {
+        _node_t *remove = node;
+        node = node->next;
+
+        _node_free(deque, remove);
+    }
+
+    deque->front = NULL;
+    deque->back = NULL;
+    deque->size = 0;
+
+    return true;
+}
 
 deque_t *deque_construct(size_t width, size_t limit, bool (*copy)(const void *source, void *destination), void (*free_)(void *value)) {
     if (width == 0 || limit == 0) {
@@ -53,7 +97,22 @@ deque_t *deque_construct(size_t width, size_t limit, bool (*copy)(const void *so
     return deque;
 }
 
-deque_t *deque_copy(deque_t *deque) {
+bool deque_contains(const deque_t *deque, const void *key, int (*compare)(const void *value, const void *key)) {
+    if (deque == NULL || key == NULL || compare == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    for (_node_t *node = deque->front; node != NULL; node = node->next) {
+        if (compare(node->value, key) == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+deque_t *deque_copy(const deque_t *deque) {
     if (deque == NULL) {
         errno = EINVAL;
         return NULL;
@@ -67,7 +126,7 @@ deque_t *deque_copy(deque_t *deque) {
 
     for (_node_t *node = deque->front; node != NULL; node = node->next) {
         if (deque_push(copy, node->value) == false) {
-            deque_free(deque);
+            deque_free(copy);
             // errno set in deque_push()
             return NULL;
         }
@@ -76,6 +135,14 @@ deque_t *deque_copy(deque_t *deque) {
     return copy;
 }
 
+bool deque_empty(const deque_t *deque) {
+    if (deque == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    return deque->front == NULL;
+}
 
 void deque_free(deque_t *deque) {
     if (deque != NULL) {
@@ -84,90 +151,7 @@ void deque_free(deque_t *deque) {
     }
 }
 
-bool deque_clear(deque_t *deque) {
-    if (deque == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    _node_t *node = deque->front;
-    
-    while (node != NULL) {
-        _node_t *remove = node;
-        node = node->next;
-
-        _node_free(deque, remove);
-    }
-
-    deque->front = NULL;
-    deque->back = NULL;
-    deque->size = 0;
-
-    return true;
-}
-
-
-bool deque_unshift(deque_t *deque, const void *value) {
-    if (deque == NULL || value == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    if (deque_full(deque)) {
-        errno = ENOSPC;
-        return false;
-    }
-
-    _node_t *new = _node_construct(deque, value);
-    if (new == NULL) {
-        // errno set in _node_construct()
-        return false;
-    }
-
-    if (deque_empty(deque)) {
-        deque->front = new;
-        deque->back = new;
-    }
-    else {
-        new->next = deque->front;
-
-        deque->front->previous = new;
-        deque->front = new;
-    }
-
-    deque->size++;
-
-    return true;
-}
-
-bool deque_shift(deque_t *deque, void *destination) {
-    if (deque == NULL || deque_empty(deque)) {
-        errno = EINVAL;
-        return false;
-    }
-
-    if (destination != NULL && deque_front(deque, destination) == false) {
-        // errno set in deque_front()
-        return false;
-    }
-
-    _node_t *remove = deque->front;
-    deque->front = deque->front->next;
-
-    if (deque->front == NULL) {
-        deque->back = NULL;
-    }
-    else {
-        deque->front->previous = NULL;
-    }
-
-    _node_free(deque, remove);
-    deque->size--;
-
-    return true;
-}
-
-bool deque_front(deque_t *deque, void *destination) {
+bool deque_front(const deque_t *deque, void *destination) {
     if (deque == NULL || destination == NULL || deque_empty(deque)) {
         errno = EINVAL;
         return false;
@@ -177,6 +161,50 @@ bool deque_front(deque_t *deque, void *destination) {
     return _value_copy(deque, deque->front->value, destination);
 }
 
+bool deque_full(const deque_t *deque) {
+    if (deque == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    return deque->size == deque->limit;
+}
+
+size_t deque_limit(const deque_t *deque) {
+    if (deque == NULL) {
+        errno = EINVAL;
+        return 0;
+    }
+
+    return deque->limit;
+}
+
+bool deque_pop(deque_t *deque, void *destination) {
+    if (deque == NULL || deque_empty(deque)) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (destination != NULL && deque_back(deque, destination) == false) {
+        // errno set in deque_back()
+        return false;
+    }
+
+    _node_t *remove = deque->back;
+    deque->back = deque->back->previous;
+
+    if (deque->back == NULL) {
+        deque->front = NULL;
+    }
+    else {
+        deque->back->next = NULL;
+    }
+
+    _node_free(deque, remove);
+    deque->size--;
+
+    return true;
+}
 
 bool deque_push(deque_t *deque, const void *value) {
     if (deque == NULL || value == NULL) {
@@ -211,25 +239,25 @@ bool deque_push(deque_t *deque, const void *value) {
     return true;
 }
 
-bool deque_pop(deque_t *deque, void *destination) {
+bool deque_shift(deque_t *deque, void *destination) {
     if (deque == NULL || deque_empty(deque)) {
         errno = EINVAL;
         return false;
     }
 
-    if (destination != NULL && deque_back(deque, destination) == false) {
-        // errno set in deque_back()
+    if (destination != NULL && deque_front(deque, destination) == false) {
+        // errno set in deque_front()
         return false;
     }
 
-    _node_t *remove = deque->back;
-    deque->back = deque->back->previous;
+    _node_t *remove = deque->front;
+    deque->front = deque->front->next;
 
-    if (deque->back == NULL) {
-        deque->front = NULL;
+    if (deque->front == NULL) {
+        deque->back = NULL;
     }
     else {
-        deque->back->next = NULL;
+        deque->front->previous = NULL;
     }
 
     _node_free(deque, remove);
@@ -238,34 +266,7 @@ bool deque_pop(deque_t *deque, void *destination) {
     return true;
 }
 
-bool deque_back(deque_t *deque, void *destination) {
-    if (deque == NULL || destination == NULL || deque_empty(deque)) {
-        errno = EINVAL;
-        return false;
-    }
-
-    // errno set in _value_copy()
-    return _value_copy(deque, deque->back->value, destination);
-}
-
-
-bool deque_contains(deque_t *deque, const void *key, int (*compare)(const void *value, const void *key)) {
-    if (deque == NULL || key == NULL || compare == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    for (_node_t *node = deque->front; node != NULL; node = node->next) {
-        if (compare(node->value, key) == 0) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-
-size_t deque_size(deque_t *deque) {
+size_t deque_size(const deque_t *deque) {
     if (deque == NULL) {
         errno = EINVAL;
         return 0;
@@ -274,7 +275,40 @@ size_t deque_size(deque_t *deque) {
     return deque->size;
 }
 
-size_t deque_width(deque_t *deque) {
+bool deque_unshift(deque_t *deque, const void *value) {
+    if (deque == NULL || value == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
+    if (deque_full(deque)) {
+        errno = ENOSPC;
+        return false;
+    }
+
+    _node_t *new = _node_construct(deque, value);
+    if (new == NULL) {
+        // errno set in _node_construct()
+        return false;
+    }
+
+    if (deque_empty(deque)) {
+        deque->front = new;
+        deque->back = new;
+    }
+    else {
+        new->next = deque->front;
+
+        deque->front->previous = new;
+        deque->front = new;
+    }
+
+    deque->size++;
+
+    return true;
+}
+
+size_t deque_width(const deque_t *deque) {
     if (deque == NULL) {
         errno = EINVAL;
         return 0;
@@ -283,36 +317,8 @@ size_t deque_width(deque_t *deque) {
     return deque->width;
 }
 
-size_t deque_limit(deque_t *deque) {
-    if (deque == NULL) {
-        errno = EINVAL;
-        return 0;
-    }
 
-    return deque->limit;
-}
-
-
-bool deque_empty(deque_t *deque) {
-    if (deque == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    return deque->front == NULL;
-}
-
-bool deque_full(deque_t *deque) {
-    if (deque == NULL) {
-        errno = EINVAL;
-        return false;
-    }
-
-    return deque->size == deque->limit;
-}
-
-
-static bool _value_copy(deque_t *deque, const void *value, void *destination) {
+static bool _value_copy(const deque_t *deque, const void *value, void *destination) {
     if (deque == NULL || value == NULL || destination == NULL) {
         errno = EINVAL;
         return false;
@@ -327,7 +333,8 @@ static bool _value_copy(deque_t *deque, const void *value, void *destination) {
     return true;
 }
 
-static _node_t *_node_construct(deque_t *deque, const void *value) {
+
+static _node_t *_node_construct(const deque_t *deque, const void *value) {
     if (deque == NULL || value == NULL) {
         errno = EINVAL;
         return NULL;
@@ -359,7 +366,7 @@ static _node_t *_node_construct(deque_t *deque, const void *value) {
     return new;
 }
 
-static void _node_free(deque_t *deque, _node_t *node) {
+static void _node_free(const deque_t *deque, _node_t *node) {
     if (deque == NULL) {
         errno = EINVAL;
         return;
