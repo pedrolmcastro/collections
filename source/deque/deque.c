@@ -3,7 +3,7 @@
  * @copyright MIT License
  * @file deque.c
  * 
- * @brief Generic deque implementation using doubly linked list
+ * @brief Generic deque implementation using a doubly linked list
  */
 
 

@@ -161,6 +161,7 @@ size_t bitarray_count(const bitarray_t *bitarray) {
     size_t bits = 0;
 
     for (size_t i = 0; i < bitarray->buckets; i++) {
+        // Count the set bits per hexadecimal
         for (byte_t j = bitarray->values[i]; j != 0; j >>= 4) {
             bits += _BITS[j & 0xF];
         }
@@ -200,6 +201,11 @@ void bitarray_free(bitarray_t *bitarray) {
 }
 
 bool bitarray_none(const bitarray_t *bitarray) {
+    if (bitarray == NULL) {
+        errno = EINVAL;
+        return false;
+    }
+
     return !bitarray_any(bitarray);
 }
 

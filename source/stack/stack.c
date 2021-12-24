@@ -3,7 +3,7 @@
  * @copyright MIT License
  * @file stack.c
  * 
- * @brief Generic stack implementation using vector
+ * @brief Generic stack implementation using a vector
  */
 
 

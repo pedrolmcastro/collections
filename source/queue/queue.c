@@ -3,7 +3,7 @@
  * @copyright MIT License
  * @file queue.c
  * 
- * @brief Generic queue implementation using singly linked list
+ * @brief Generic queue implementation using a singly linked list
  */
 
 

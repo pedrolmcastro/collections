@@ -32,17 +32,16 @@ const size_t VECTOR_LIMIT = SIZE_MAX / (2 * sizeof(void *)) - 1;
 
 
 // Auxiliary functions for values
-static void *_value_construct(vector_t *vector, const void *value);
-static bool _value_copy(vector_t *vector, const void *value, void *destination);
-static void _value_free(vector_t *vector, void *value);
+static void *_value_construct(const vector_t *vector, const void *value);
+static bool _value_copy(const vector_t *vector, const void *value, void *destination);
+static void _value_free(const vector_t *vector, void *value);
 
-// Auxiliary functions and variables for sorting
+// Auxiliary functions for sorting
 static int _qsort_compare(const void *first, const void *second);
 static int (*_compare)(const void *first, const void *second);
-static bool _reverse;
 
 
-size_t vector_capacity(vector_t *vector) {
+size_t vector_capacity(const vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
         return 0;
@@ -102,12 +101,12 @@ vector_t *vector_construct(size_t width, size_t limit, size_t capacity, double g
     return vector;
 }
 
-bool vector_contains(vector_t *vector, const void *key, int (*compare)(const void *value, const void *key)) {
+bool vector_contains(const vector_t *vector, const void *key, int (*compare)(const void *value, const void *key)) {
     // errno set in vector_search()
     return vector_search(vector, key, compare) != SIZE_MAX;
 }
 
-vector_t *vector_copy(vector_t *vector) {
+vector_t *vector_copy(const vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
         return NULL;
@@ -130,7 +129,7 @@ vector_t *vector_copy(vector_t *vector) {
     return copy;
 }
 
-bool vector_empty(vector_t *vector) {
+bool vector_empty(const vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
         return false;
@@ -150,7 +149,7 @@ void vector_free(vector_t *vector) {
     }
 }
 
-bool vector_full(vector_t *vector) {
+bool vector_full(const vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
         return false;
@@ -159,7 +158,7 @@ bool vector_full(vector_t *vector) {
     return vector->size == vector->limit;
 }
 
-bool vector_get(vector_t *vector, size_t index, void *destination) {
+bool vector_get(const vector_t *vector, size_t index, void *destination) {
     if (vector == NULL || index >= vector->size || destination == NULL) {
         errno = EINVAL;
         return false;
@@ -169,7 +168,7 @@ bool vector_get(vector_t *vector, size_t index, void *destination) {
     return _value_copy(vector, vector->values[index], destination);
 }
 
-double vector_growth(vector_t *vector) {
+double vector_growth(const vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
         return 0;
@@ -210,7 +209,7 @@ bool vector_insert(vector_t *vector, size_t index, const void *value) {
     return true;
 }
 
-size_t vector_limit(vector_t *vector) {
+size_t vector_limit(const vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
         return 0;
@@ -291,7 +290,7 @@ bool vector_reserve(vector_t *vector, size_t size) {
     return true;
 }
 
-vector_t *vector_reverse(vector_t *vector) {
+vector_t *vector_reverse(const vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
         return NULL;
@@ -314,7 +313,7 @@ vector_t *vector_reverse(vector_t *vector) {
     return reversed;
 }
 
-size_t vector_search(vector_t *vector, const void *key, int (*compare)(const void *value, const void *key)) {
+size_t vector_search(const vector_t *vector, const void *key, int (*compare)(const void *value, const void *key)) {
     if (vector == NULL || key == NULL || compare == NULL) {
         errno = EINVAL;
         return SIZE_MAX;
@@ -347,7 +346,7 @@ bool vector_set(vector_t *vector, size_t index, const void *value) {
     return true;
 }
 
-size_t vector_size(vector_t *vector) {
+size_t vector_size(const vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
         return 0;
@@ -356,15 +355,13 @@ size_t vector_size(vector_t *vector) {
     return vector->size;
 }
 
-bool vector_sort(vector_t *vector, bool reverse, int (*compare)(const void *first, const void *second)) {
+bool vector_sort(vector_t *vector, int (*compare)(const void *first, const void *second)) {
     if (vector == NULL || compare == NULL) {
         errno = EINVAL;
         return false;
     }
 
-    _reverse = reverse;
     _compare = compare;
-
     qsort(vector->values, vector->size, sizeof(void *), _qsort_compare);
 
     return true;
@@ -395,7 +392,7 @@ bool vector_trim(vector_t *vector) {
     return true;
 }
 
-size_t vector_width(vector_t *vector) {
+size_t vector_width(const vector_t *vector) {
     if (vector == NULL) {
         errno = EINVAL;
         return 0;
@@ -405,7 +402,7 @@ size_t vector_width(vector_t *vector) {
 }
 
 
-static void *_value_construct(vector_t *vector, const void *value) {
+static void *_value_construct(const vector_t *vector, const void *value) {
     if (vector == NULL || value == NULL) {
         errno = EINVAL;
         return NULL;
@@ -426,7 +423,7 @@ static void *_value_construct(vector_t *vector, const void *value) {
     return new;
 }
 
-static bool _value_copy(vector_t *vector, const void *value, void *destination) {
+static bool _value_copy(const vector_t *vector, const void *value, void *destination) {
     if (vector == NULL || value == NULL || destination == NULL) {
         errno = EINVAL;
         return false;
@@ -441,7 +438,7 @@ static bool _value_copy(vector_t *vector, const void *value, void *destination) 
     return true;
 }
 
-static void _value_free(vector_t *vector, void *value) {
+static void _value_free(const vector_t *vector, void *value) {
     if (vector == NULL) {
         errno = EINVAL;
         return;
@@ -458,5 +455,5 @@ static void _value_free(vector_t *vector, void *value) {
 
 
 static int _qsort_compare(const void *first, const void *second) {
-    return (_reverse ? -1 : 1) * _compare(*(void **)first, *(void **)second);
+    return _compare(*(void **)first, *(void **)second);
 }

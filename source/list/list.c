@@ -45,8 +45,8 @@ static void _node_free(const list_t *list, _node_t *node);
 static bool _node_remove(list_t *list, _node_t *node);
 static _node_t *_node_search(const list_t *list, size_t index);
 
-// Auxiliary functions for lists
-static _node_t *_list_mergesort(_node_t *front, bool reverse, int (*compare)(const void *first, const void *second));
+// Auxiliary functions for sorting
+static _node_t *_list_mergesort(_node_t *front, int (*compare)(const void *first, const void *second));
 
 
 bool list_clear(list_t *list) {
@@ -322,14 +322,15 @@ size_t list_size(const list_t *list) {
     return list->size;
 }
 
-bool list_sort(list_t *list, bool reverse, int (*compare)(const void *first, const void *second)) {
+bool list_sort(list_t *list, int (*compare)(const void *first, const void *second)) {
     if (list == NULL || compare == NULL) {
         errno = EINVAL;
         return false;
     }
 
-    list->front = _list_mergesort(list->front, reverse, compare);
+    list->front = _list_mergesort(list->front, compare);
 
+    // Recover the list back
     for (_node_t *node = list->front; node != NULL; node = node->next) {
         list->back = node;
     }
@@ -507,7 +508,8 @@ static _node_t *_list_split(_node_t *front) {
     return temporary;
 }
 
-static _node_t *_list_merge(_node_t *first, _node_t *second, bool reverse, int (*compare)(const void *first, const void *second)) {
+
+static _node_t *_list_merge(_node_t *first, _node_t *second, int (*compare)(const void *first, const void *second)) {
     if (first == NULL) {
         return second;
     }
@@ -516,35 +518,31 @@ static _node_t *_list_merge(_node_t *first, _node_t *second, bool reverse, int (
         return first;
     }
 
-    _node_t *smaller;
-
-    if ((reverse ? -1 : 1) * compare(first->value, second->value) < 0) {
-        first->next = _list_merge(first->next, second, reverse, compare);
+    if (compare(first->value, second->value) < 0) {
+        first->next = _list_merge(first->next, second, compare);
         first->next->previous = first;
         first->previous = NULL;
 
-        smaller = first;
+        return first;
     }
     else {
-        second->next = _list_merge(first, second->next, reverse, compare);
+        second->next = _list_merge(first, second->next, compare);
         second->next->previous = second;
         second->previous = NULL;
 
-        smaller = second;
+        return second;
     }
-
-    return smaller;
 }
 
-static _node_t *_list_mergesort(_node_t *front, bool reverse, int (*compare)(const void *first, const void *second)) {
+static _node_t *_list_mergesort(_node_t *front, int (*compare)(const void *first, const void *second)) {
     if (front == NULL || front->next == NULL) {
         return front;
     }
 
     _node_t *second = _list_split(front);
 
-    front = _list_mergesort(front, reverse, compare);
-    second = _list_mergesort(second, reverse, compare);
+    front = _list_mergesort(front, compare);
+    second = _list_mergesort(second, compare);
 
-    return _list_merge(front, second, reverse, compare);
+    return _list_merge(front, second, compare);
 }
