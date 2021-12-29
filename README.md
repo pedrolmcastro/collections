@@ -1,6 +1,6 @@
 # Collections
 
-Collections is a generic data structures library for the C language with low memory overhead built using only C standard libraries for the final project of the [CS50x](https://cs50.harvard.edu/x/) curse. See some more about this project in this [YouTube video](https://www.youtube.com).
+Collections is a generic data structures library for the C language with low memory overhead built using only C standard libraries for the final project of the [CS50x](https://cs50.harvard.edu/x/) course. See some more about this project on this [YouTube video](https://www.youtube.com).
 
 
 ## Features
@@ -40,9 +40,9 @@ Because the C language does not have exceptions, the return values are used to n
 > **Warning:** The ENOSPC errno value is normally used in a different context, but for this library it signifies that there is no space left in the given collection, meaning it is full.
 
 
-## Desing
+## Design
 
-Although C is not an OOP language, the object oriented style was emulated by declaring the structures in `.c` files and using static functions to ensure encapsulation while also preceding "method" names with the "class" name and making its first argument a "this" reference to access the data required.
+Even though C is not an OOP language, the object oriented style was emulated by declaring the structures in `.c` files and using static functions to ensure encapsulation while also preceding "method" names with the "class" name and making its first argument a "this" reference to access the data required.
 
 
 ## Dependencies
@@ -58,7 +58,7 @@ Despite depending on the C standard libraries, all collections are independent f
 
 ## Installation
 
-This project does **not** have the proper static or dynamic library files yet. To add the library to your code download the [ZIP file](https://github.com/pedrolmcastro/collections/blob/main/collections.zip) or the desired collection files and compile it with the rest of the project. An example with all the library files inside a _collections_ directory can be seen in the [Makefile example](https://github.com/pedrolmcastro/collections/blob/main/examples/Makefile).
+This project does **not** have the proper static or dynamic library files yet. To add the library to your code, download the [ZIP file](https://github.com/pedrolmcastro/collections/blob/main/collections.zip) or the desired collection files and compile it along the rest of the project. An example with all the library files inside a _collections_ directory can be seen in the [Makefile example](https://github.com/pedrolmcastro/collections/blob/main/examples/Makefile).
 
 ```
 gcc main.c collections/*.c -o main -I collections
