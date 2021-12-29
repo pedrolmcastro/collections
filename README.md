@@ -1,6 +1,6 @@
 # Collections
 
-Collections is a generic data structures library for the C language with low memory overhead built using only C standard libraries for the final project of the [CS50x](https://cs50.harvard.edu/x/) course. See some more about this project on this [YouTube video](https://www.youtube.com).
+Collections is a generic data structures library for the C language with low memory overhead built using only C standard libraries for the final project of the [CS50x](https://cs50.harvard.edu/x/) course. See some more about this project on this [YouTube video](https://youtu.be/N9B3cnHjf8w).
 
 
 ## Features
